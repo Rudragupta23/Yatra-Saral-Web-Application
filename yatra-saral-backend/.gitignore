@@ -1,0 +1,24 @@
+.env
+/node_modules
+# Dependencies
+[cite_start]/node_modules [cite: 1]
+
+# Environment Variables
+# Keep your secret keys out of version control
+[cite_start].env [cite: 1]
+
+# Log files
+*.log
+logs
+npm-debug.log*
+
+# Build output
+dist
+build
+
+# macOS specific
+.DS_Store
+
+# Editor directories and files
+.vscode
+.idea

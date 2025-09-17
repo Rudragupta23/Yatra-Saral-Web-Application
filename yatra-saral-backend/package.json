@@ -1,0 +1,19 @@
+{
+  "name": "yatra-saral-backend",
+  "version": "1.0.0",
+  "description": "Backend for Yatra Saral app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "mongodb": "^6.19.0",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^6.10.1"
+  }
+}
