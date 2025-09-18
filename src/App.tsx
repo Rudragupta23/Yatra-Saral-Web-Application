@@ -76,7 +76,7 @@ const FooterComponent = ({ onNavigate }: { onNavigate: (section: string) => void
               <a href="https://github.com/Rudragupta23" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary hover:scale-110 transition-transform duration-200"><Github size={24}/></a>
               <a href="https://www.youtube.com/@rudrag05" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary hover:scale-110 transition-transform duration-200"><Youtube size={24}/></a>
               <a href="https://www.instagram.com/rud.ra_23/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary hover:scale-110 transition-transform duration-200"><Instagram size={24}/></a>
-              <a href="https://www.linkedin.com/in/rudragupta23/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary hover:scale-110 transition-transform duration-200"><Linkedin size={24}/></a>
+              <a href="https://linkedin.com/in/rudrag23" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary hover:scale-110 transition-transform duration-200"><Linkedin size={24}/></a>
             </div>
           </div>
 
