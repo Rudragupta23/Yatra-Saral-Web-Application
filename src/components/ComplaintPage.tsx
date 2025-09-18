@@ -23,7 +23,7 @@ export const ComplaintPage: React.FC = ({ onNavigate }: { onNavigate: (section: 
     const fetchPassengers = async () => {
         if (!user) return;
         try {
-            const response = await fetch(`http://localhost:5000/api/passengers/${user.email}`);
+            const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/passengers/${user.email}`);
             if (response.ok) {
                 const data = await response.json();
                 setSavedPassengers(data);
@@ -70,7 +70,7 @@ export const ComplaintPage: React.FC = ({ onNavigate }: { onNavigate: (section: 
         userEmail: user?.email 
       };
 
-      const response = await fetch('http://localhost:5000/api/complaints', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/complaints`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(complaintData),

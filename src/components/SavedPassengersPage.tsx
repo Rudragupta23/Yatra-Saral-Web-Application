@@ -38,7 +38,7 @@ export const SavedPassengersPage: React.FC = () => {
     const fetchPassengers = async () => {
       if (!user) return;
       try {
-        const response = await fetch(`http://localhost:5000/api/passengers/${user.email}`);
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/passengers/${user.email}`);
         if (!response.ok) throw new Error('Failed to fetch passengers');
         const data = await response.json();
         setPassengers(data);
@@ -59,7 +59,7 @@ export const SavedPassengersPage: React.FC = () => {
 
     if (editingPassenger) {
       try {
-        const response = await fetch(`http://localhost:5000/api/passengers/${editingPassenger._id}`, {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/passengers/${editingPassenger._id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(passengerData),
@@ -92,7 +92,7 @@ export const SavedPassengersPage: React.FC = () => {
       }
     } else {
       try {
-        const response = await fetch('http://localhost:5000/api/passengers', {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/passengers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(passengerData),
@@ -112,7 +112,7 @@ export const SavedPassengersPage: React.FC = () => {
 
   const handleDelete = async (passengerId: string) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/passengers/${passengerId}`, {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/passengers/${passengerId}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete passenger');

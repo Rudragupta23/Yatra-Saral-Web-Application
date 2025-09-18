@@ -28,7 +28,7 @@ export const TravelAlertsPage = ({ onNavigate }: { onNavigate: (section: string)
     const checkUserTickets = async () => {
       if (user?.email) {
         try {
-          const response = await fetch(`http://localhost:5000/api/tickets/${user.email}`);
+          const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/tickets/${user.email}`);
           const tickets = await response.json();
           const filteredActiveTickets = tickets.filter((ticket: any) => ticket.status !== 'Cancelled');
           setActiveTickets(filteredActiveTickets);
@@ -43,7 +43,7 @@ export const TravelAlertsPage = ({ onNavigate }: { onNavigate: (section: string)
 
   const onSubmit = async (data: any) => {
     try {
-      const response = await fetch('http://localhost:5000/api/subscribe-alerts', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/subscribe-alerts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pnr: data.pnr, email: data.email }),

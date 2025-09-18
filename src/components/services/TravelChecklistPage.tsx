@@ -157,7 +157,7 @@ export const TravelChecklistPage = ({ onNavigate }: { onNavigate: (section: stri
   }
 
   try {
-    const response = await fetch('http://localhost:5000/api/send-travel-checklist', {
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/send-travel-checklist`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

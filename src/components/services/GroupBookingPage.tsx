@@ -40,7 +40,7 @@ export const GroupBookingPage = ({ onNavigate }: { onNavigate: (section: string)
     const fetchPassengers = async () => {
         if (!user) return;
         try {
-            const response = await fetch(`http://localhost:5000/api/passengers/${user.email}`);
+            const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/passengers/${user.email}`);
             const data = await response.json();
             setSavedPassengers(data);
         } catch (error) {
@@ -169,7 +169,7 @@ ${index + 1}. Name: ${p.name}, Age: ${p.age}, Gender: ${p.gender}
         };
         
         try {
-            const response = await fetch('http://localhost:5000/api/group-tickets', {
+            const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/group-tickets`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(ticketPayload),

@@ -51,7 +51,7 @@ export const TravelInsurancePage = ({ onNavigate }: { onNavigate: (section: stri
     const fetchPassengers = async () => {
         if (!user) return;
         try {
-            const response = await fetch(`http://localhost:5000/api/passengers/${user.email}`);
+            const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/passengers/${user.email}`);
             const data = await response.json();
             setSavedPassengers(data);
         } catch (error) {
@@ -108,7 +108,7 @@ export const TravelInsurancePage = ({ onNavigate }: { onNavigate: (section: stri
       };
 
       try {
-        const res = await fetch('http://localhost:5000/api/insurance-applications', {
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/insurance-applications`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(applicationData),

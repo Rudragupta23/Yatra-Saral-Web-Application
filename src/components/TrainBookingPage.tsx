@@ -65,7 +65,7 @@ export const TrainBookingPage: React.FC = ({ onNavigate }: { onNavigate: (sectio
   useEffect(() => {
     const fetchSavedPassengers = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/passengers');
+            const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/passengers`);
             if (response.ok) {
                 const data = await response.json();
                 setSavedPassengers(data);
@@ -195,7 +195,7 @@ export const TrainBookingPage: React.FC = ({ onNavigate }: { onNavigate: (sectio
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/tickets', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/tickets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ticketPayload),

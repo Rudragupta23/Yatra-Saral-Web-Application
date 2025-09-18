@@ -32,7 +32,7 @@ export const ViewTicketsPage: React.FC = ({ onNavigate }: { onNavigate: (section
     const fetchTickets = async () => {
       if (user) {
         try {
-          const response = await fetch(`http://localhost:5000/api/tickets/${user.email}`);
+          const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/tickets/${user.email}`);
           if (!response.ok) {
             throw new Error('Failed to fetch tickets');
           }
@@ -112,14 +112,14 @@ Happy Journey!
   
   const cancelTicket = async (ticketId: string) => {
     try {
-        const response = await fetch(`http://localhost:5000/api/tickets/${ticketId}/cancel`, {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/tickets/${ticketId}/cancel`, {
             method: 'PATCH',
         });
 
         if (!response.ok) {
             throw new Error('Failed to cancel ticket');
         }
-        await fetch(`http://localhost:5000/api/seat-upgrades/by-pnr/${ticketId}`, {
+        await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/seat-upgrades/by-pnr/${ticketId}`, {
             method: 'DELETE',
         });
         setTickets(prevTickets => 
@@ -143,7 +143,7 @@ Happy Journey!
 
   const removeCancelledTickets = async () => {
     try {
-        const response = await fetch('http://localhost:5000/api/tickets/cancelled', {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/tickets/cancelled`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: user?.email }),

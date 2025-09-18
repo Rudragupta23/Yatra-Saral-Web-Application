@@ -44,7 +44,7 @@ export const SeatUpgradesPage = ({ onNavigate }: { onNavigate: (section: string)
     const fetchUserTickets = async () => {
         if (user?.email) {
             try {
-                const response = await fetch(`http://localhost:5000/api/tickets/${user.email}`);
+                const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/tickets/${user.email}`);
                 const data = await response.json();
                 const eligibleTickets = data.filter((t: any) => t.status === 'Confirmed' && !t.isGroup);
                 setUserTickets(eligibleTickets);
@@ -95,7 +95,7 @@ export const SeatUpgradesPage = ({ onNavigate }: { onNavigate: (section: string)
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/seat-upgrades', { 
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/seat-upgrades`, { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(upgradeData)

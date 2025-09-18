@@ -43,7 +43,7 @@ export const SettingsPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/users/change-password', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,7 +67,7 @@ export const SettingsPage: React.FC = () => {
 
   const handleDeleteAccount = async (data: any) => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/delete-account', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/delete-account`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

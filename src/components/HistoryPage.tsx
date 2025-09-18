@@ -163,10 +163,10 @@ export const HistoryPage = ({ onNavigate }: { onNavigate: (section: string) => v
       if (user) {
         try {
           const [ticketsRes, bookingsRes, complaintsRes, pantryRes] = await Promise.all([
-            fetch(`http://localhost:5000/api/tickets/${user.email}`),
-            fetch(`http://localhost:5000/api/bookings/${user.email}`),
-            fetch(`http://localhost:5000/api/complaints/${user.email}`),
-            fetch(`http://localhost:5000/api/food-orders/${user.email}`)
+            fetch(`${import.meta.env.VITE_BACKEND_URL}/api/tickets/${user.email}`),
+            fetch(`${import.meta.env.VITE_BACKEND_URL}/api/bookings/${user.email}`),
+            fetch(`${import.meta.env.VITE_BACKEND_URL}/api/complaints/${user.email}`),
+            fetch(`${import.meta.env.VITE_BACKEND_URL}/api/food-orders/${user.email}`)
           ]);
 
           const tickets = (await ticketsRes.json()).map((i: any) => ({...i, type: 'ticket'}));
@@ -198,7 +198,7 @@ export const HistoryPage = ({ onNavigate }: { onNavigate: (section: string) => v
     const idToDelete = itemToDelete.type === 'ticket' ? itemToDelete.id : itemToDelete._id;
 
     try {
-        const response = await fetch(`http://localhost:5000${details.deleteEndpoint}${idToDelete}`, {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}${details.deleteEndpoint}${idToDelete}`, {
             method: 'DELETE',
         });
 

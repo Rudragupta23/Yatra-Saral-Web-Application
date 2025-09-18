@@ -39,7 +39,7 @@ export const PlatformTicketsPage = ({ onNavigate }: { onNavigate: (section: stri
       };
 
       try {
-        const res = await fetch('http://localhost:5000/api/platform-tickets', { 
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/platform-tickets`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(ticketPurchaseData) 
