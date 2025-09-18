@@ -1,6 +1,10 @@
 # Yatra Saral - Your Journey Made Simple ✨
 
 An advanced, feature-rich web application designed to revolutionize the train travel experience in India. Yatra Saral provides a seamless, intuitive, and all-in-one platform for booking tickets, planning detailed journeys, and accessing a comprehensive suite of on-the-go services. Built with a modern tech stack including React, Vite, Node.js, and shadcn/ui for a fast, responsive, and accessible experience.
+
+Website link - [www.yatrasaral.com](https://yatrasaral.onrender.com/)
+
+
 ## 🚀 Core Features
 
 -   **Seamless Authentication:** Secure user registration, login, and password recovery Forgot Password workflows. OTP verification via email ensures a secure sign-up process.
