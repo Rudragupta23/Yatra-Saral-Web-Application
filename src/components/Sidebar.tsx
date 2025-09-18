@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { Button } from './ui/button';
+import { ScrollArea } from './ui/scroll-area';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -26,8 +27,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate }) => {
-const { user, setAuthModal, theme, toggleTheme, t } = useApp();
-const { toast } = useToast();
+  const { user, setAuthModal, theme, toggleTheme, t } = useApp();
+  const { toast } = useToast();
   const menuItems = [
     {
       id: 'theme',
@@ -47,22 +48,22 @@ const { toast } = useToast();
       label: t('menu.emergency'),
       onClick: () => onNavigate('emergency')
     },
-{
-  id: 'complaint',
-  icon: MessageSquare,
-  label: t('menu.complaint'),
-  onClick: () => {
-    if (user) {
-      onNavigate('complaint');
-    } else {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in or sign up to file a complaint.",
-      });
-      setAuthModal({ isOpen: true, view: 'login' });
-    }
-  }
-},
+    {
+      id: 'complaint',
+      icon: MessageSquare,
+      label: t('menu.complaint'),
+      onClick: () => {
+        if (user) {
+          onNavigate('complaint');
+        } else {
+          toast({
+            title: "Authentication Required",
+            description: "Please sign in or sign up to file a complaint.",
+          });
+          setAuthModal({ isOpen: true, view: 'login' });
+        }
+      }
+    },
     {
       id: 'feedback',
       icon: Heart,
@@ -119,47 +120,48 @@ const { toast } = useToast();
               stiffness: 200,
               opacity: { duration: 0.3 }
             }}
+            // Use flex-col to structure the header and scroll area
             className="fixed left-0 top-0 h-full w-80 bg-gradient-to-b from-card to-card/95 
-              backdrop-blur-sm border-r border-border z-50 shadow-2xl overflow-hidden"
+              backdrop-blur-sm border-r border-border z-50 shadow-2xl overflow-hidden flex flex-col"
           >
             {/* Decorative background elements */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/10 to-transparent rounded-full blur-2xl" />
             <div className="absolute bottom-0 left-0 w-40 h-40 bg-gradient-to-tr from-secondary/10 to-transparent rounded-full blur-2xl" />
             
-            <div className="relative z-10 p-6">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-8">
-                <motion.h2 
-                  onClick={() => {
-                    onNavigate('home');
-                    onClose();
-                  }}
-                  className="text-2xl font-black text-primary tracking-tight cursor-pointer transition-opacity hover:opacity-80"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
+            {/* Header (Non-scrollable part) */}
+            <div className="relative z-10 flex items-center justify-between p-6 pb-4">
+              <motion.h2 
+                onClick={() => {
+                  onNavigate('home');
+                  onClose();
+                }}
+                className="text-2xl font-black text-primary tracking-tight cursor-pointer transition-opacity hover:opacity-80"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                {t('site.name')}
+              </motion.h2>
+              <motion.div
+                whileHover={{ rotate: 90, scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  className="hover:bg-destructive/10 hover:text-destructive rounded-full
+                    transition-all duration-300 hover:shadow-lg"
                 >
-                  {t('site.name')}
-                </motion.h2>
-                <motion.div
-                  whileHover={{ rotate: 90, scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onClose}
-                    className="hover:bg-destructive/10 hover:text-destructive rounded-full
-                      transition-all duration-300 hover:shadow-lg"
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                </motion.div>
-              </div>
+                  <X className="h-5 w-5" />
+                </Button>
+              </motion.div>
+            </div>
 
-              {/* Menu Items */}
-              <nav className="space-y-3">
+            {/* Scrollable Menu Items */}
+            <ScrollArea className="flex-1 z-10">
+              <nav className="space-y-3 px-6 pb-6">
                 {menuItems.map((item, index) => (
                   <motion.div
                     key={item.id}
@@ -197,7 +199,6 @@ const { toast } = useToast();
                         </span>
                       </motion.div>
                       
-                      {/* Animated border highlight */}
                       <motion.div
                         className="absolute inset-0 border-2 border-primary/20 rounded-xl opacity-0 group-hover:opacity-100"
                         initial={{ scale: 0.8, opacity: 0 }}
@@ -205,7 +206,6 @@ const { toast } = useToast();
                         transition={{ duration: 0.3 }}
                       />
                       
-                      {/* Shimmer effect */}
                       <motion.div
                         className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full"
                         animate={{ translateX: ["100%", "-100%"] }}
@@ -220,7 +220,7 @@ const { toast } = useToast();
                   </motion.div>
                 ))}
               </nav>
-            </div>
+            </ScrollArea>
           </motion.div>
         </>
       )}
