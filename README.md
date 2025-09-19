@@ -203,7 +203,7 @@ To run the application, you need to run both the frontend and backend servers.
 1.  **Run the backend server:**
     ```bash
     cd yatra-saral-backend
-    npm start
+    node server.js
     ```
 
 2.  **Run the frontend development server:**
