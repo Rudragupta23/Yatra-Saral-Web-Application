@@ -3,10 +3,9 @@ const express = require('express');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
 const { MongoClient, ObjectId } = require('mongodb');
-const cron = require('node-cron');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken'); // <-- Added for authentication
-const crypto = require('crypto'); // <-- Added for generating unique token IDs
+const cron = require('node-cron'); 
+const bcrypt = require('bcrypt'); 
+
 
 const app = express();
 app.use(cors());
@@ -23,40 +22,12 @@ client.connect()
   })
   .catch(err => console.error('Failed to connect to MongoDB', err));
 
-// --- Middleware for Token Verification ---
-const verifyToken = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ message: 'Access denied. No token provided.' });
-    }
-    const token = authHeader.split(' ')[1];
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        // Check if the token has been denylisted (logged out or deleted user)
-        const isBlacklisted = await db.collection('token_denylist').findOne({ jti: decoded.jti });
-        if (isBlacklisted) {
-            return res.status(401).json({ message: 'Token has been revoked. Please log in again.' });
-        }
-
-        req.user = decoded; // Add user payload (id, email, name) to the request object
-        next();
-    } catch (error) {
-        if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({ message: 'Session has expired. Please log in again.' });
-        }
-        return res.status(401).json({ message: 'Invalid token.' });
-    }
-};
-
-
 // Nodemailer setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASS, 
   },
 });
 
@@ -73,13 +44,16 @@ cron.schedule('0 * * * *', async () => {
   tomorrow.setDate(now.getDate() + 1);
   const tomorrowDateString = tomorrow.toISOString().split('T')[0]; // Format: YYYY-MM-DD
 
+  // Find all subscriptions for journeys happening tomorrow
   const subscriptions = await db.collection('alertSubscriptions').find({
     journeyDate: tomorrowDateString
   }).toArray();
 
+  //  Will tell you if the server is finding any subscriptions to process.
   console.log(`Found ${subscriptions.length} subscriptions for journeys on ${tomorrowDateString}.`);
 
   for (const sub of subscriptions) {
+   
     const possibleStatuses = [
         'is running on time.',
         'is delayed by 15 minutes.',
@@ -113,14 +87,6 @@ cron.schedule('0 * * * *', async () => {
   }
 });
 
-// Clean up expired tokens from the denylist every day at midnight
-cron.schedule('0 0 * * *', async () => {
-    if (!db) return;
-    const now = new Date();
-    console.log('Running daily cleanup of token denylist...');
-    const result = await db.collection('token_denylist').deleteMany({ exp: { $lt: now } });
-    console.log(`Removed ${result.deletedCount} expired tokens from denylist.`);
-});
 
 // ---------------- Weather API Proxy ----------------
 app.get('/api/weather', async (req, res) => {
@@ -179,63 +145,59 @@ app.post('/send-reset-code', (req, res) => {
 });
 
 // --- API Endpoints for Saved Passengers ---
-app.get('/api/passengers', verifyToken, async (req, res) => {
+app.get('/api/passengers/:email', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
+  const { email } = req.params;
   const passengers = await db.collection('passengers').find({ userEmail: email }).toArray();
   res.json(passengers);
 });
-
-app.post('/api/passengers', verifyToken, async (req, res) => {
+app.post('/api/passengers', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const newPassengerData = { ...req.body, userEmail: req.user.email };
-  const result = await db.collection('passengers').insertOne(newPassengerData);
+  const newPassengerData = req.body;
+  const result = await db.collection('passengers').insertOne({ ...newPassengerData });
   const newPassenger = await db.collection('passengers').findOne({ _id: result.insertedId });
   res.status(201).json(newPassenger);
 });
-
-app.put('/api/passengers/:id', verifyToken, async (req, res) => {
+app.put('/api/passengers/:id', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   const { id } = req.params;
   const updatedData = req.body;
   delete updatedData._id;
   try {
     const result = await db.collection('passengers').findOneAndUpdate(
-      { _id: new ObjectId(id), userEmail: req.user.email }, // Ensure user can only update their own passengers
+      { _id: new ObjectId(id) },
       { $set: updatedData },
       { returnDocument: 'after' }
     );
     if (result) {
       res.json(result);
     } else {
-      res.status(404).json({ message: 'Passenger not found or you do not have permission to edit it' });
+      res.status(404).json({ message: 'Passenger not found with that ID' });
     }
   } catch (error) {
     console.error("Failed to update passenger:", error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
-
-app.delete('/api/passengers/:id', verifyToken, async (req, res) => {
+app.delete('/api/passengers/:id', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   const { id } = req.params;
-  await db.collection('passengers').deleteOne({ _id: new ObjectId(id), userEmail: req.user.email });
+  await db.collection('passengers').deleteOne({ _id: new ObjectId(id) });
   res.status(204).send();
 });
 
-
 // --- API Endpoints for Complaints ---
-app.get('/api/complaints', verifyToken, async (req, res) => {
+app.get('/api/complaints/:email', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
+  const { email } = req.params;
   const complaints = await db.collection('complaints').find({ userEmail: email }).toArray();
   res.json(complaints);
 });
 
-app.post('/api/complaints', verifyToken, async (req, res) => {
+app.post('/api/complaints', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
 
-  const complaintData = { ...req.body, userEmail: req.user.email };
+  const complaintData = req.body;
   const complaintId = 'COMP-' + Math.random().toString(36).substr(2, 9).toUpperCase();
   const newComplaint = {
     id: complaintId,
@@ -247,6 +209,7 @@ app.post('/api/complaints', verifyToken, async (req, res) => {
   const result = await db.collection('complaints').insertOne(newComplaint);
   const createdComplaint = await db.collection('complaints').findOne({ _id: result.insertedId });
 
+ 
   const { name, email, category, description, pnr } = complaintData;
 
   if (email) {
@@ -284,14 +247,15 @@ app.post('/api/complaints', verifyToken, async (req, res) => {
       }
     });
   }
+ 
 
   res.status(201).json(createdComplaint);
 });
 
 // --- API Endpoints for Train Tickets ---
-app.get('/api/tickets', verifyToken, async (req, res) => {
+app.get('/api/tickets/:email', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
+  const { email } = req.params;
   const tickets = await db.collection('tickets').find({
     $or: [
       { 'passenger.email': email },
@@ -300,10 +264,9 @@ app.get('/api/tickets', verifyToken, async (req, res) => {
   }).toArray();
   res.json(tickets);
 });
-
-app.post('/api/tickets', verifyToken, async (req, res) => {
+app.post('/api/tickets', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const ticketData = { ...req.body, email: req.user.email };
+  const ticketData = req.body;
   const ticketId = 'TKT' + Math.random().toString(36).substr(2, 9).toUpperCase();
   const newTicket = {
     id: ticketId,
@@ -317,17 +280,17 @@ app.post('/api/tickets', verifyToken, async (req, res) => {
 });
 
 // --- API Endpoints for Pantry Food Orders ---
-app.get('/api/food-orders', verifyToken, async (req, res) => {
+app.get('/api/food-orders/:email', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
+  const { email } = req.params;
   const orders = await db.collection('food-orders').find({ userEmail: email }).toArray();
   res.json(orders);
 });
 
-app.post('/api/food-orders', verifyToken, async (req, res) => {
+app.post('/api/food-orders', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-
-  const orderData = { ...req.body, userEmail: req.user.email };
+  
+  const orderData = req.body;
   const orderId = 'PF' + Math.random().toString(36).substr(2, 9).toUpperCase();
   const newOrder = {
     id: orderId,
@@ -392,16 +355,17 @@ app.post('/api/food-orders', verifyToken, async (req, res) => {
   res.status(201).json(createdOrder);
 });
 
-// --- API Endpoints for Feedback ---
-app.post('/api/feedback', verifyToken, async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
 
-  const feedbackData = { ...req.body, userEmail: req.user.email };
+// --- API Endpoints for Feedback ---
+app.post('/api/feedback', async (req, res) => {
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  
+  const feedbackData = req.body;
   const newFeedback = {
     ...feedbackData,
     submittedAt: new Date().toISOString()
   };
-
+  
   await db.collection('feedback').insertOne(newFeedback);
 
   const { name, email, category, message } = feedbackData;
@@ -451,13 +415,16 @@ app.post('/api/send-signup-otp', async (req, res) => {
     if (!email) return res.status(400).json({ message: 'Email is required' });
 
     try {
+        // 1. Check if a user with this email already exists
         const existingUser = await db.collection('users').findOne({ email: email });
         if (existingUser) {
             return res.status(409).json({ message: 'An account with this email already exists.' });
         }
 
+        // 2. Generate a 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
+        // 3. Create the email content
         const mailOptions = {
             from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
             to: email,
@@ -468,12 +435,14 @@ app.post('/api/send-signup-otp', async (req, res) => {
                 <p style="font-size: 24px; font-weight: bold; letter-spacing: 5px; background: #f0f0f0; padding: 10px; border-radius: 5px;">
                   ${otp}
                 </p>
-              </div>`,
+            </div>`,
         };
 
+        // 4. Send the email
         await transporter.sendMail(mailOptions);
         console.log('Signup OTP email sent to: ' + email);
-
+        
+        // 5. Respond to the frontend with the OTP for verification
         res.status(200).json({ message: 'OTP sent successfully', otp: otp });
 
     } catch (error) {
@@ -482,158 +451,110 @@ app.post('/api/send-signup-otp', async (req, res) => {
     }
 });
 
-// --- Authentication Endpoints ---
+// --- Your existing Authentication endpoints ---
 app.post('/api/register', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  
-  // Trim whitespace and convert email to lowercase
-  const { name, phone } = req.body;
-  const email = req.body.email.trim().toLowerCase();
-  const password = req.body.password.trim();
-
-  const existingUser = await db.collection('users').findOne({ email: email });
-  if (existingUser) {
-    return res.status(409).json({ message: 'User with this email already exists.' });
-  }
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { name, email, phone, password } = req.body;
+  
+  const existingUser = await db.collection('users').findOne({ email: email });
+  if (existingUser) {
+    return res.status(409).json({ message: 'User with this email already exists.' });
+  }
 
   const saltRounds = 10;
   const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-  const result = await db.collection('users').insertOne({ name, email, phone, password: hashedPassword });
-  const newUser = await db.collection('users').findOne({ _id: result.insertedId });
-  delete newUser.password;
-  res.status(201).json(newUser);
+  const result = await db.collection('users').insertOne({ name, email, phone, password: hashedPassword });
+  const newUser = await db.collection('users').findOne({ _id: result.insertedId });
+  delete newUser.password;
+  res.status(201).json(newUser);
 });
-
-
 
 app.post('/api/login', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  
-  // Trim whitespace and convert email to lowercase
-  const email = req.body.email.trim().toLowerCase();
-  const password = req.body.password.trim();
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email, password } = req.body;
 
-  const user = await db.collection('users').findOne({ email: email });
+  const user = await db.collection('users').findOne({ email: email });
+
   const passwordMatch = user ? await bcrypt.compare(password, user.password) : false;
 
-  if (user && passwordMatch) {
-    delete user.password;
-    const payload = { id: user._id, email: user.email, name: user.name };
-    const jti = crypto.randomBytes(16).toString('hex');
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: '1d', // Token will expire in 1 day
-        jwtid: jti,
-    });
-    res.status(200).json({ user, token }); // Send user info and token to client
-  } else {
-    res.status(401).json({ message: 'Invalid email or password' });
-  }
+  if (user && passwordMatch) {
+    delete user.password;
+    res.status(200).json(user);
+  } else {
+    res.status(401).json({ message: 'Invalid email or password' });
+  }
 });
-
-app.post('/api/logout', verifyToken, async (req, res) => {
-    try {
-        const authHeader = req.headers.authorization;
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.decode(token);
-
-        if (decoded && decoded.jti) {
-            // Add token's jti to the denylist with its original expiry date
-            await db.collection('token_denylist').insertOne({ jti: decoded.jti, exp: new Date(decoded.exp * 1000) });
-            res.status(200).json({ message: 'Successfully logged out' });
-        } else {
-            res.status(400).json({ message: 'Invalid token' });
-        }
-    } catch (error) {
-        console.error('Logout error:', error);
-        res.status(500).json({ message: 'Internal server error during logout' });
-    }
-});
-
 
 app.post('/api/reset-password', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { email, newPassword } = req.body;
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email, newPassword } = req.body;
 
   const saltRounds = 10;
   const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-  const result = await db.collection('users').updateOne(
-    { email: email },
-    { $set: { password: hashedPassword } }
-  );
-  if (result.matchedCount === 0) {
-    return res.status(404).json({ message: 'User not found' });
-  }
-  res.status(200).json({ message: 'Password updated successfully' });
+  const result = await db.collection('users').updateOne(
+    { email: email },
+    { $set: { password: hashedPassword } }
+  );
+  if (result.matchedCount === 0) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+  res.status(200).json({ message: 'Password updated successfully' });
 });
 
 // --- API Endpoints for User Settings ---
-app.post('/api/users/change-password', verifyToken, async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { currentPassword, newPassword } = req.body;
-  const email = req.user.email; // Get email from verified token
-  const user = await db.collection('users').findOne({ email: email });
+app.post('/api/users/change-password', async (req, res) => {
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email, currentPassword, newPassword } = req.body;
+  const user = await db.collection('users').findOne({ email: email });
 
   const passwordMatch = user ? await bcrypt.compare(currentPassword, user.password) : false;
 
-  if (!user || !passwordMatch) {
-    return res.status(401).json({ message: 'Your current password is not correct' });
-  }
+  if (!user || !passwordMatch) {
+    return res.status(401).json({ message: 'Invalid credentials or user not found' });
+  }
 
   const saltRounds = 10;
   const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-  const result = await db.collection('users').updateOne(
-    { email: email },
-    { $set: { password: hashedPassword } }
-  );
-  if (result.modifiedCount === 0) {
-    return res.status(500).json({ message: 'Could not update password' });
-  }
-  res.status(200).json({ message: 'Password updated successfully' });
+  const result = await db.collection('users').updateOne(
+    { email: email },
+    { $set: { password: hashedPassword } }
+  );
+  if (result.modifiedCount === 0) {
+    return res.status(500).json({ message: 'Could not update password' });
+  }
+  res.status(200).json({ message: 'Password updated successfully' });
 });
 
-app.delete('/api/users/delete-account', verifyToken, async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { password } = req.body;
-  const email = req.user.email; // Get email from verified token
-
-  const user = await db.collection('users').findOne({ email: email });
+app.delete('/api/users/delete-account', async (req, res) => {
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email, password } = req.body;
+  const user = await db.collection('users').findOne({ email: email });
+  
   const passwordMatch = user ? await bcrypt.compare(password, user.password) : false;
 
-  if (!user || !passwordMatch) {
-    return res.status(401).json({ message: 'Invalid password. Could not delete account.' });
-  }
+  if (!user || !passwordMatch) {
+    return res.status(401).json({ message: 'Invalid password. Could not delete account.' });
+  }
 
-  // Before deleting the user, add their current token to the denylist
-  const authHeader = req.headers.authorization;
-  const token = authHeader.split(' ')[1];
-  try {
-      const decoded = jwt.decode(token);
-      if (decoded && decoded.jti) {
-          await db.collection('token_denylist').insertOne({ jti: decoded.jti, exp: new Date(decoded.exp * 1000) });
-      }
-  } catch (e) {
-      console.error("Could not decode token to denylist during account deletion:", e);
-  }
-
-  await db.collection('users').deleteOne({ email: email });
-  res.status(200).json({ message: 'Account deleted successfully' });
+  await db.collection('users').deleteOne({ email: email });
+  res.status(200).json({ message: 'Account deleted successfully' });
 });
 
 // --- API Endpoints for Service Bookings ---
-app.get('/api/bookings', verifyToken, async (req, res) => {
+app.get('/api/bookings/:email', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
+  const { email } = req.params;
   const bookings = await db.collection('bookings').find({ userEmail: email }).toArray();
   res.json(bookings);
 });
 
-app.post('/api/bookings', verifyToken, async (req, res) => {
+app.post('/api/bookings', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
 
-  const bookingData = { ...req.body, userEmail: req.user.email };
+  const bookingData = req.body;
   const bookingId = 'SB' + Math.random().toString(36).substr(2, 9).toUpperCase();
   const newBooking = {
     id: bookingId,
@@ -656,18 +577,22 @@ app.post('/api/bookings', verifyToken, async (req, res) => {
         introductoryParagraph = `Your booking for the Cloak Room is confirmed. You can now securely store your luggage at our facility.`;
         finalInstruction = `Please show this confirmation email and a valid photo ID at the Cloak Room counter to deposit your luggage.`;
         break;
+      
       case 'Coolie Service':
         introductoryParagraph = `Your request for a Coolie (Porter) is confirmed. A licensed porter will be available to assist you with your luggage.`;
         finalInstruction = `Please look for a licensed porter in a red uniform at your designated platform and show them this booking confirmation.`;
         break;
+
       case 'Wheelchair Assistance':
         introductoryParagraph = `Your request for Wheelchair Assistance is confirmed. Our staff is ready to ensure a smooth and comfortable transit through the station.`;
         finalInstruction = `Please approach the Station Manager's office or the main inquiry counter upon arrival and show this confirmation email. Our staff will assist you from there.`;
         break;
+
       case 'Dormitory':
         introductoryParagraph = `Your booking for a bed in the railway Dormitory is confirmed. Enjoy a comfortable rest during your transit.`;
         finalInstruction = `Please proceed to the Dormitory reception at the station and present this confirmation email along with a valid photo ID to check in.`;
         break;
+
       default:
         introductoryParagraph = `Your request for ${service} has been confirmed. Our staff will be available to assist you. Please find the details of your booking below:`;
         finalInstruction = `Please show this email to our staff at the station for assistance.`;
@@ -679,7 +604,7 @@ app.post('/api/bookings', verifyToken, async (req, res) => {
         <h1 style="color: #17a2b8; text-align: center;">Service Booking Confirmed!</h1>
         <p>Hi ${name},</p>
         <p>${introductoryParagraph}</p>
-
+        
         <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 20px;">
             <h3 style="margin: 0;">Booking ID: <span style="color: #333; letter-spacing: 1px;">${createdBooking.id}</span></h3>
         </div>
@@ -731,24 +656,26 @@ app.post('/api/bookings', verifyToken, async (req, res) => {
 });
 
 // --- API Endpoints for Ticket Management ---
-app.patch('/api/tickets/:id/cancel', verifyToken, async (req, res) => {
+app.patch('/api/tickets/:id/cancel', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   const { id } = req.params;
   const result = await db.collection('tickets').updateOne(
-    { id: id, 'passenger.email': req.user.email },
+    { id: id },
     { $set: { status: 'Cancelled' } }
   );
   if (result.matchedCount === 0) {
-    return res.status(404).json({ message: 'Ticket not found or you do not have permission to cancel it' });
+    return res.status(404).json({ message: 'Ticket not found' });
   }
   await db.collection('alertSubscriptions').deleteOne({ pnr: id });
   console.log(`Removed alert subscription for cancelled PNR: ${id}`);
   res.status(200).json({ message: 'Ticket cancelled and alert subscription removed successfully' });
 });
-
-app.delete('/api/tickets/cancelled', verifyToken, async (req, res) => {
+app.delete('/api/tickets/cancelled', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
   await db.collection('tickets').deleteMany({
     status: 'Cancelled',
     $or: [
@@ -760,27 +687,27 @@ app.delete('/api/tickets/cancelled', verifyToken, async (req, res) => {
 });
 
 // --- API Endpoints for Deleting History Items ---
-const deleteItemById = async (collectionName, id, userEmail, res) => {
+const deleteItemById = async (collectionName, id, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   try {
-    const result = await db.collection(collectionName).deleteOne({ _id: new ObjectId(id), userEmail: userEmail });
+    const result = await db.collection(collectionName).deleteOne({ _id: new ObjectId(id) });
     if (result.deletedCount === 0) {
-      return res.status(404).json({ message: 'Item not found or you do not have permission to delete it' });
+      return res.status(404).json({ message: 'Item not found' });
     }
     res.status(200).json({ message: 'Item deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete item' });
   }
 };
-app.delete('/api/food-orders/:id', verifyToken, (req, res) => deleteItemById('food-orders', req.params.id, req.user.email, res));
-app.delete('/api/complaints/:id', verifyToken, (req, res) => deleteItemById('complaints', req.params.id, req.user.email, res));
-app.delete('/api/bookings/:id', verifyToken, (req, res) => deleteItemById('bookings', req.params.id, req.user.email, res));
-app.delete('/api/tickets/:id', verifyToken, async (req, res) => {
+app.delete('/api/food-orders/:id', (req, res) => deleteItemById('food-orders', req.params.id, res));
+app.delete('/api/complaints/:id', (req, res) => deleteItemById('complaints', req.params.id, res));
+app.delete('/api/bookings/:id', (req, res) => deleteItemById('bookings', req.params.id, res));
+app.delete('/api/tickets/:id', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   try {
-    const result = await db.collection('tickets').deleteOne({ id: req.params.id, email: req.user.email });
+    const result = await db.collection('tickets').deleteOne({ id: req.params.id });
     if (result.deletedCount === 0) {
-      return res.status(404).json({ message: 'Ticket not found or you do not have permission to delete it' });
+      return res.status(404).json({ message: 'Ticket not found' });
     }
     res.status(200).json({ message: 'Ticket deleted successfully' });
   } catch (error) {
@@ -789,9 +716,9 @@ app.delete('/api/tickets/:id', verifyToken, async (req, res) => {
 });
 
 // --- API Endpoints for Group Ticket Booking ---
-app.post('/api/group-tickets', verifyToken, async (req, res) => {
+app.post('/api/group-tickets', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const ticketData = { ...req.body, email: req.user.email };
+  const ticketData = req.body;
   const ticketId = 'GRP' + Math.random().toString(36).substr(2, 9).toUpperCase();
   const newGroupTicket = {
     id: ticketId,
@@ -806,16 +733,15 @@ app.post('/api/group-tickets', verifyToken, async (req, res) => {
 });
 
 // --- API Endpoints for Platform Tickets ---
-app.get('/api/platform-tickets', verifyToken, async (req, res) => {
+app.get('/api/platform-tickets/:email', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
+  const { email } = req.params;
   const tickets = await db.collection('platform-tickets').find({ userEmail: email }).toArray();
   res.json(tickets);
 });
-
-app.post('/api/platform-tickets', verifyToken, async (req, res) => {
+app.post('/api/platform-tickets', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const ticketData = { ...req.body, userEmail: req.user.email };
+  const ticketData = req.body;
   const ticketId = 'PT-' + Date.now().toString(36).toUpperCase();
   const newTicketPurchase = {
     id: ticketId,
@@ -878,17 +804,17 @@ app.post('/api/platform-tickets', verifyToken, async (req, res) => {
 });
 
 // --- API Endpoints for Travel Insurance ---
-app.get('/api/insurance-applications', verifyToken, async (req, res) => {
+app.get('/api/insurance-applications/:email', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
+  const { email } = req.params;
   const applications = await db.collection('insurance-applications').find({ userEmail: email }).toArray();
   res.json(applications);
 });
 
-app.post('/api/insurance-applications', verifyToken, async (req, res) => {
+app.post('/api/insurance-applications', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
 
-  const applicationData = { ...req.body, userEmail: req.user.email };
+  const applicationData = req.body;
   const applicationId = 'INS-' + Date.now().toString(36).toUpperCase();
   const newApplication = {
     id: applicationId,
@@ -960,27 +886,29 @@ app.post('/api/insurance-applications', verifyToken, async (req, res) => {
   res.status(201).json(createdApplication);
 });
 
+
+
 // --- API Endpoints for Seat Upgrades ---
-app.get('/api/seat-upgrades', verifyToken, async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const email = req.user.email;
-  const upgrades = await db.collection('seat-upgrades').find({ userEmail: email }).toArray();
-  res.json(upgrades);
+app.get('/api/seat-upgrades/:email', async (req, res) => {
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email } = req.params;
+  const upgrades = await db.collection('seat-upgrades').find({ userEmail: email }).toArray();
+  res.json(upgrades);
 });
 
-app.post('/api/seat-upgrades', verifyToken, async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
+app.post('/api/seat-upgrades', async (req, res) => {
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  
+  const upgradeData = req.body;
+  const upgradeId = 'UPG-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+  const newUpgradeRequest = {
+    id: upgradeId,
+    ...upgradeData,
+    date: new Date().toISOString(),
+  };
 
-  const upgradeData = { ...req.body, userEmail: req.user.email };
-  const upgradeId = 'UPG-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-  const newUpgradeRequest = {
-    id: upgradeId,
-    ...upgradeData,
-    date: new Date().toISOString(),
-  };
-
-  const result = await db.collection('seat-upgrades').insertOne(newUpgradeRequest);
-  const createdUpgrade = await db.collection('seat-upgrades').findOne({ _id: result.insertedId });
+  const result = await db.collection('seat-upgrades').insertOne(newUpgradeRequest);
+  const createdUpgrade = await db.collection('seat-upgrades').findOne({ _id: result.insertedId });
 
   const { pnr, from, to, requestWindowSeat, status, userEmail } = upgradeData;
   const email = userEmail;
@@ -991,7 +919,7 @@ app.post('/api/seat-upgrades', verifyToken, async (req, res) => {
 
     if (status === 'Confirmed Upgrade') {
       infoParagraph = `Congratulations! Your seat upgrade request has been successfully confirmed. Any fare difference, if applicable, will be collected by the TTE on board the train.`;
-    } else {
+    } else { 
       infoParagraph = `Your request to be on the waitlist for a seat upgrade has been received. You will be notified via email and SMS if an upgrade becomes available.`;
     }
 
@@ -1000,7 +928,7 @@ app.post('/api/seat-upgrades', verifyToken, async (req, res) => {
         <h1 style="color: #4f46e5; text-align: center;">${title}</h1>
         <p>Hi there,</p>
         <p>${infoParagraph}</p>
-
+        
         <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 20px;">
             <h3 style="margin: 0;">Request ID: <span style="color: #333; letter-spacing: 1px;">${createdUpgrade.id}</span></h3>
         </div>
@@ -1048,16 +976,15 @@ app.post('/api/seat-upgrades', verifyToken, async (req, res) => {
     });
   }
 
-  res.status(201).json(createdUpgrade);
+  res.status(201).json(createdUpgrade);
 });
 
 // --- API Endpoint for PNR Verification ---
-app.post('/api/tickets/verify-pnr', verifyToken, async (req, res) => {
+app.post('/api/tickets/verify-pnr', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { pnr } = req.body;
-  const email = req.user.email;
-  if (!pnr) {
-    return res.status(400).json({ message: 'PNR is required' });
+  const { pnr, email } = req.body;
+  if (!pnr || !email) {
+    return res.status(400).json({ message: 'PNR and email are required' });
   }
   const ticket = await db.collection('tickets').findOne({
     id: pnr,
@@ -1074,12 +1001,11 @@ app.post('/api/tickets/verify-pnr', verifyToken, async (req, res) => {
 });
 
 // --- API Endpoints for Travel Alerts ---
-app.post('/api/subscribe-alerts', verifyToken, async (req, res) => {
+app.post('/api/subscribe-alerts', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { pnr } = req.body;
-  const email = req.user.email;
-  if (!pnr) {
-    return res.status(400).json({ message: 'PNR is required' });
+  const { pnr, email } = req.body;
+  if (!pnr || !email) {
+    return res.status(400).json({ message: 'PNR and email are required' });
   }
   const ticket = await db.collection('tickets').findOne({
     id: pnr,
@@ -1106,22 +1032,21 @@ app.post('/api/subscribe-alerts', verifyToken, async (req, res) => {
   await db.collection('alertSubscriptions').insertOne(newSubscription);
   res.status(201).json({ message: `Successfully subscribed for alerts for PNR ${pnr}.` });
 });
-
-app.delete('/api/unsubscribe-alerts/:pnr', verifyToken, async (req, res) => {
+app.delete('/api/unsubscribe-alerts/:pnr', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   const { pnr } = req.params;
-  await db.collection('alertSubscriptions').deleteOne({ pnr: pnr, email: req.user.email });
+  await db.collection('alertSubscriptions').deleteOne({ pnr: pnr });
   res.status(204).send();
 });
 
+
 // --- NEW ENDPOINT for sending Budget Report Email ---
-app.post('/api/send-budget-report', verifyToken, async (req, res) => {
+app.post('/api/send-budget-report', async (req, res) => {
     if (!db) return res.status(503).json({ message: 'Database not connected' });
 
-    const { items, totalCost, name } = req.body;
-    const email = req.user.email;
+    const { items, totalCost, email, name } = req.body;
 
-    if (!items || !Array.isArray(items) || totalCost === undefined) {
+    if (!email || !items || !Array.isArray(items) || totalCost === undefined) {
         return res.status(400).json({ message: 'Missing required data for the report.' });
     }
 
@@ -1179,14 +1104,14 @@ app.post('/api/send-budget-report', verifyToken, async (req, res) => {
 });
 
 // --- Travel Checklist Email Endpoint ---
-app.post('/api/send-travel-checklist', verifyToken, async (req, res) => {
+
+app.post('/api/send-travel-checklist', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
 
-  const { checklist, name } = req.body;
-  const email = req.user.email;
+  const { checklist, email, name } = req.body;
 
-  if (!checklist) {
-    return res.status(400).json({ message: 'Checklist data is required' });
+  if (!email || !checklist) {
+    return res.status(400).json({ message: 'Email and checklist are required' });
   }
 
   try {
