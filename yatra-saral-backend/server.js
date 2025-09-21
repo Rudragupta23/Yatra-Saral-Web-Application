@@ -31,6 +31,40 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// --- NEW: Helper function to send a welcome email ---
+const sendWelcomeEmail = (email, name) => {
+  const mailOptions = {
+    from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `Welcome to Yatra Saral, ${name}!`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <h1 style="color: #0d6efd; text-align: center;">Welcome, ${name}!</h1>
+          <p>We're thrilled to have you on board. With Yatra Saral, your train journeys are about to get a whole lot simpler.</p>
+          <p>Here are a few things you can do to get started:</p>
+          <ul>
+            <li><strong>Book a Ticket:</strong> Find and book trains in just a few clicks.</li>
+            <li><strong>Plan a Trip:</strong> Use our tools to plan your itinerary and budget.</li>
+            <li><strong>Order Food:</strong> Get delicious meals delivered right to your seat.</li>
+          </ul>
+          <p>If you have any questions, feel free to visit our FAQ or contact our support team.</p>
+          <p>Happy travels,<br/>The Yatra Saral Team</p>
+        </div>
+      </div>
+    `,
+  };
+
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error(`Failed to send welcome email to ${email}:`, error);
+    } else {
+      console.log(`Welcome email sent to ${email}: ${info.response}`);
+    }
+  });
+};
+
+
 // This task will run at the beginning of every hour.
 cron.schedule('0 * * * *', async () => {
   console.log('Running hourly check for travel alerts...');
@@ -53,7 +87,7 @@ cron.schedule('0 * * * *', async () => {
   console.log(`Found ${subscriptions.length} subscriptions for journeys on ${tomorrowDateString}.`);
 
   for (const sub of subscriptions) {
-   
+    
     const possibleStatuses = [
         'is running on time.',
         'is delayed by 15 minutes.',
@@ -209,7 +243,7 @@ app.post('/api/complaints', async (req, res) => {
   const result = await db.collection('complaints').insertOne(newComplaint);
   const createdComplaint = await db.collection('complaints').findOne({ _id: result.insertedId });
 
- 
+  
   const { name, email, category, description, pnr } = complaintData;
 
   if (email) {
@@ -247,7 +281,7 @@ app.post('/api/complaints', async (req, res) => {
       }
     });
   }
- 
+  
 
   res.status(201).json(createdComplaint);
 });
@@ -435,7 +469,7 @@ app.post('/api/send-signup-otp', async (req, res) => {
                 <p style="font-size: 24px; font-weight: bold; letter-spacing: 5px; background: #f0f0f0; padding: 10px; border-radius: 5px;">
                   ${otp}
                 </p>
-            </div>`,
+              </div>`,
         };
 
         // 4. Send the email
@@ -453,94 +487,103 @@ app.post('/api/send-signup-otp', async (req, res) => {
 
 // --- Your existing Authentication endpoints ---
 app.post('/api/register', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { name, email, phone, password } = req.body;
-  
-  const existingUser = await db.collection('users').findOne({ email: email });
-  if (existingUser) {
-    return res.status(409).json({ message: 'User with this email already exists.' });
-  }
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { name, email, phone, password } = req.body;
+  
+  const existingUser = await db.collection('users').findOne({ email: email });
+  if (existingUser) {
+    return res.status(409).json({ message: 'User with this email already exists.' });
+  }
 
   const saltRounds = 10;
   const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-  const result = await db.collection('users').insertOne({ name, email, phone, password: hashedPassword });
-  const newUser = await db.collection('users').findOne({ _id: result.insertedId });
-  delete newUser.password;
-  res.status(201).json(newUser);
+  const result = await db.collection('users').insertOne({ name, email, phone, password: hashedPassword });
+  const newUser = await db.collection('users').findOne({ _id: result.insertedId });
+  
+  // Send welcome email after successful registration
+  if (newUser) {
+    sendWelcomeEmail(newUser.email, newUser.name);
+  }
+
+  delete newUser.password;
+  res.status(201).json(newUser);
 });
 
 app.post('/api/login', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { email, password } = req.body;
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email, password } = req.body;
 
-  const user = await db.collection('users').findOne({ email: email });
+  const user = await db.collection('users').findOne({ email: email });
 
   const passwordMatch = user ? await bcrypt.compare(password, user.password) : false;
 
-  if (user && passwordMatch) {
-    delete user.password;
-    res.status(200).json(user);
-  } else {
-    res.status(401).json({ message: 'Invalid email or password' });
-  }
+  if (user && passwordMatch) {
+    // Send welcome email on successful login
+    sendWelcomeEmail(user.email, user.name);
+    
+    delete user.password;
+    res.status(200).json(user);
+  } else {
+    res.status(401).json({ message: 'Invalid email or password' });
+  }
 });
 
 app.post('/api/reset-password', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { email, newPassword } = req.body;
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email, newPassword } = req.body;
 
   const saltRounds = 10;
   const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-  const result = await db.collection('users').updateOne(
-    { email: email },
-    { $set: { password: hashedPassword } }
-  );
-  if (result.matchedCount === 0) {
-    return res.status(404).json({ message: 'User not found' });
-  }
-  res.status(200).json({ message: 'Password updated successfully' });
+  const result = await db.collection('users').updateOne(
+    { email: email },
+    { $set: { password: hashedPassword } }
+  );
+  if (result.matchedCount === 0) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+  res.status(200).json({ message: 'Password updated successfully' });
 });
 
 // --- API Endpoints for User Settings ---
 app.post('/api/users/change-password', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { email, currentPassword, newPassword } = req.body;
-  const user = await db.collection('users').findOne({ email: email });
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email, currentPassword, newPassword } = req.body;
+  const user = await db.collection('users').findOne({ email: email });
 
   const passwordMatch = user ? await bcrypt.compare(currentPassword, user.password) : false;
 
-  if (!user || !passwordMatch) {
-    return res.status(401).json({ message: 'Invalid credentials or user not found' });
-  }
+  if (!user || !passwordMatch) {
+    return res.status(401).json({ message: 'Invalid credentials or user not found' });
+  }
 
   const saltRounds = 10;
   const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-  const result = await db.collection('users').updateOne(
-    { email: email },
-    { $set: { password: hashedPassword } }
-  );
-  if (result.modifiedCount === 0) {
-    return res.status(500).json({ message: 'Could not update password' });
-  }
-  res.status(200).json({ message: 'Password updated successfully' });
+  const result = await db.collection('users').updateOne(
+    { email: email },
+    { $set: { password: hashedPassword } }
+  );
+  if (result.modifiedCount === 0) {
+    return res.status(500).json({ message: 'Could not update password' });
+  }
+  res.status(200).json({ message: 'Password updated successfully' });
 });
 
 app.delete('/api/users/delete-account', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { email, password } = req.body;
-  const user = await db.collection('users').findOne({ email: email });
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email, password } = req.body;
+  const user = await db.collection('users').findOne({ email: email });
   
   const passwordMatch = user ? await bcrypt.compare(password, user.password) : false;
 
-  if (!user || !passwordMatch) {
-    return res.status(401).json({ message: 'Invalid password. Could not delete account.' });
-  }
+  if (!user || !passwordMatch) {
+    return res.status(401).json({ message: 'Invalid password. Could not delete account.' });
+  }
 
-  await db.collection('users').deleteOne({ email: email });
-  res.status(200).json({ message: 'Account deleted successfully' });
+  await db.collection('users').deleteOne({ email: email });
+  res.status(200).json({ message: 'Account deleted successfully' });
 });
 
 // --- API Endpoints for Service Bookings ---
@@ -890,25 +933,25 @@ app.post('/api/insurance-applications', async (req, res) => {
 
 // --- API Endpoints for Seat Upgrades ---
 app.get('/api/seat-upgrades/:email', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { email } = req.params;
-  const upgrades = await db.collection('seat-upgrades').find({ userEmail: email }).toArray();
-  res.json(upgrades);
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email } = req.params;
+  const upgrades = await db.collection('seat-upgrades').find({ userEmail: email }).toArray();
+  res.json(upgrades);
 });
 
 app.post('/api/seat-upgrades', async (req, res) => {
-  if (!db) return res.status(503).json({ message: 'Database not connected' });
-  
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  
   const upgradeData = req.body;
-  const upgradeId = 'UPG-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-  const newUpgradeRequest = {
-    id: upgradeId,
-    ...upgradeData,
-    date: new Date().toISOString(),
-  };
+  const upgradeId = 'UPG-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+  const newUpgradeRequest = {
+    id: upgradeId,
+    ...upgradeData,
+    date: new Date().toISOString(),
+  };
 
-  const result = await db.collection('seat-upgrades').insertOne(newUpgradeRequest);
-  const createdUpgrade = await db.collection('seat-upgrades').findOne({ _id: result.insertedId });
+  const result = await db.collection('seat-upgrades').insertOne(newUpgradeRequest);
+  const createdUpgrade = await db.collection('seat-upgrades').findOne({ _id: result.insertedId });
 
   const { pnr, from, to, requestWindowSeat, status, userEmail } = upgradeData;
   const email = userEmail;
@@ -976,7 +1019,7 @@ app.post('/api/seat-upgrades', async (req, res) => {
     });
   }
 
-  res.status(201).json(createdUpgrade);
+  res.status(201).json(createdUpgrade);
 });
 
 // --- API Endpoint for PNR Verification ---
