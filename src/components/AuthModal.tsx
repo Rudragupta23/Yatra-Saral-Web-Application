@@ -243,7 +243,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" {...register('phone', { required: 'Phone is required' })} placeholder="Enter your phone number" />
+              <Input 
+                id="phone" 
+                type="tel" 
+                {...register('phone', { 
+                  required: 'Phone number is required',
+                  minLength: {
+                    value: 10,
+                    message: 'Phone number must be exactly 10 digits'
+                  },
+                  maxLength: {
+                    value: 10,
+                    message: 'Phone number must be exactly 10 digits'
+                  },
+                  pattern: {
+                    value: /^[0-9]+$/,
+                    message: 'Please enter only numbers'
+                  }
+                })} 
+                placeholder="Enter your 10-digit phone number" 
+              />
               {errors.phone && <p className="text-sm text-destructive">{errors.phone.message as string}</p>}
             </div>
           </>
