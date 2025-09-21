@@ -485,7 +485,11 @@ app.post('/api/send-signup-otp', async (req, res) => {
 // --- Authentication Endpoints ---
 app.post('/api/register', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { name, email, phone, password } = req.body;
+  
+  // Trim whitespace and convert email to lowercase
+  const { name, phone } = req.body;
+  const email = req.body.email.trim().toLowerCase();
+  const password = req.body.password.trim();
 
   const existingUser = await db.collection('users').findOne({ email: email });
   if (existingUser) {
@@ -500,6 +504,8 @@ app.post('/api/register', async (req, res) => {
   delete newUser.password;
   res.status(201).json(newUser);
 });
+
+
 
 app.post('/api/login', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
