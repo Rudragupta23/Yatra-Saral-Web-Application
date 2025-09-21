@@ -509,7 +509,10 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  const { email, password } = req.body;
+  
+  // Trim whitespace and convert email to lowercase
+  const email = req.body.email.trim().toLowerCase();
+  const password = req.body.password.trim();
 
   const user = await db.collection('users').findOne({ email: email });
   const passwordMatch = user ? await bcrypt.compare(password, user.password) : false;
