@@ -46,6 +46,7 @@ Website link - [www.yatrasaral.com](https://yatrasaral.onrender.com/)
 * **Styling:** Tailwind CSS
 * **Backend:** Node.js, Express.js
 * **Database:** MongoDB
+* **Deployment** Git, GitHub, Docker, Render
 
 ## 📂 Project Structure
 
