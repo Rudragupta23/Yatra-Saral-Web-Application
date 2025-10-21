@@ -22,13 +22,12 @@ client.connect()
   })
   .catch(err => console.error('Failed to connect to MongoDB', err));
 
+// Nodemailer setup
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465, // Use port 465
-  secure: true, // Port 465 requires secure: true
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASS, 
   },
 });
 
