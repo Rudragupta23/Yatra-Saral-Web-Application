@@ -1,10 +1,12 @@
 require('dotenv').config();
 const express = require('express');
-const nodemailer = require('nodemailer');
+// const nodemailer = require('nodemailer'); // No longer needed
+const sgMail = require('@sendgrid/mail'); // Use SendGrid
+sgMail.setApiKey(process.env.SENDGRID_API_KEY); // Set the API key
 const cors = require('cors');
 const { MongoClient, ObjectId } = require('mongodb');
-const cron = require('node-cron'); 
-const bcrypt = require('bcrypt'); 
+const cron = require('node-cron');
+const bcrypt = require('bcrypt');
 
 
 const app = express();
@@ -22,20 +24,14 @@ client.connect()
   })
   .catch(err => console.error('Failed to connect to MongoDB', err));
 
-// Nodemailer setup
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, 
-  },
-});
+// Nodemailer setup - DELETED
 
 // --- NEW: Helper function to send a welcome email ---
-const sendWelcomeEmail = (email, name) => {
-  const mailOptions = {
-    from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
+const sendWelcomeEmail = async (email, name) => {
+  // Renamed to 'msg' for SendGrid
+  const msg = {
     to: email,
+    from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Must be your verified SendGrid sender
     subject: `Welcome to Yatra Saral, ${name}!`,
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -55,13 +51,15 @@ const sendWelcomeEmail = (email, name) => {
     `,
   };
 
-  transporter.sendMail(mailOptions, (error, info) => {
-    if (error) {
-      console.error(`Failed to send welcome email to ${email}:`, error);
-    } else {
-      console.log(`Welcome email sent to ${email}: ${info.response}`);
+  try {
+    await sgMail.send(msg); // Use sgMail.send
+    console.log(`Welcome email sent to ${email}`);
+  } catch (error) {
+    console.error(`Failed to send welcome email to ${email}:`, error);
+    if (error.response) {
+      console.error(error.response.body);
     }
-  });
+  }
 };
 
 
@@ -87,20 +85,19 @@ cron.schedule('0 * * * *', async () => {
   console.log(`Found ${subscriptions.length} subscriptions for journeys on ${tomorrowDateString}.`);
 
   for (const sub of subscriptions) {
-    
     const possibleStatuses = [
-        'is running on time.',
-        'is delayed by 15 minutes.',
-        'is delayed by 30 minutes.',
-        'has been cancelled.',
-        'has been rescheduled.',
-        'platform has been changed to 5.',
+      'is running on time.',
+      'is delayed by 15 minutes.',
+      'is delayed by 30 minutes.',
+      'has been cancelled.',
+      'has been rescheduled.',
+      'platform has been changed to 5.',
     ];
     const randomStatus = possibleStatuses[Math.floor(Math.random() * possibleStatuses.length)];
 
-    const mailOptions = {
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
+    const msg = { // Renamed to 'msg'
       to: sub.email,
+      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
       subject: `Hourly Update for Train #${sub.trainNumber}`,
       html: `<div style="font-family: sans-serif; padding: 20px;">
               <p>Hi there,</p>
@@ -111,13 +108,15 @@ cron.schedule('0 * * * *', async () => {
               </div>`
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(`Failed to send alert to ${sub.email}:`, error);
-      } else {
-        console.log(`Alert sent to ${sub.email} with info: ${info.response}`);
+    try {
+      await sgMail.send(msg); // Use sgMail.send
+      console.log(`Alert sent to ${sub.email}`);
+    } catch (error) {
+      console.error(`Failed to send alert to ${sub.email}:`, error);
+      if (error.response) {
+        console.error(error.response.body);
       }
-    });
+    }
   }
 });
 
@@ -151,13 +150,14 @@ app.get('/api/weather', async (req, res) => {
 });
 
 // ---------------- Forgot Password ----------------
-app.post('/send-reset-code', (req, res) => {
+app.post('/send-reset-code', async (req, res) => { // Made async
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: 'Email is required' });
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const mailOptions = {
-    from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
+  
+  const msg = { // Renamed to 'msg'
     to: email,
+    from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
     subject: 'Your Yatra Saral Password Reset Code',
     html: `<div style="font-family: sans-serif; text-align: center; padding: 20px;">
       <h2>Password Reset</h2>
@@ -168,14 +168,18 @@ app.post('/send-reset-code', (req, res) => {
       <p>This code will expire in 10 minutes.</p>
     </div>`,
   };
-  transporter.sendMail(mailOptions, (error, info) => {
-    if (error) {
-      console.log(error);
-      return res.status(500).json({ message: 'Failed to send email' });
-    }
-    console.log('Email sent: ' + info.response);
+
+  try {
+    await sgMail.send(msg); // Use sgMail.send
+    console.log('Email sent: ' + email);
     res.status(200).json({ message: 'Email sent successfully', code: code });
-  });
+  } catch (error) {
+    console.log(error);
+    if (error.response) {
+      console.error(error.response.body);
+    }
+    return res.status(500).json({ message: 'Failed to send email' });
+  }
 });
 
 // --- API Endpoints for Saved Passengers ---
@@ -243,7 +247,7 @@ app.post('/api/complaints', async (req, res) => {
   const result = await db.collection('complaints').insertOne(newComplaint);
   const createdComplaint = await db.collection('complaints').findOne({ _id: result.insertedId });
 
-  
+
   const { name, email, category, description, pnr } = complaintData;
 
   if (email) {
@@ -266,22 +270,23 @@ app.post('/api/complaints', async (req, res) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: `"Yatra Saral Support" <${process.env.EMAIL_USER}>`,
+    const msg = { // Renamed to 'msg'
       to: email,
+      from: `"Yatra Saral Support" <${process.env.EMAIL_USER}>`, // Verified sender
       subject: `Complaint Registered [ID: ${createdComplaint.id}]`,
       html: emailHtml,
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(`Failed to send complaint confirmation email to ${email}:`, error);
-      } else {
-        console.log(`Complaint confirmation email sent to ${email}: ${info.response}`);
+    try {
+      await sgMail.send(msg); // Use sgMail.send
+      console.log(`Complaint confirmation email sent to ${email}`);
+    } catch (error) {
+      console.error(`Failed to send complaint confirmation email to ${email}:`, error);
+      if (error.response) {
+        console.error(error.response.body);
       }
-    });
+    }
   }
-  
 
   res.status(201).json(createdComplaint);
 });
@@ -323,7 +328,7 @@ app.get('/api/food-orders/:email', async (req, res) => {
 
 app.post('/api/food-orders', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  
+
   const orderData = req.body;
   const orderId = 'PF' + Math.random().toString(36).substr(2, 9).toUpperCase();
   const newOrder = {
@@ -370,20 +375,22 @@ app.post('/api/food-orders', async (req, res) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
+    const msg = { // Renamed to 'msg'
       to: email,
+      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
       subject: `Your Pantry Food Order #${createdOrder.id} is Confirmed!`,
       html: emailHtml,
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(`Failed to send food order confirmation email to ${email}:`, error);
-      } else {
-        console.log(`Food order confirmation email sent to ${email}: ${info.response}`);
+    try {
+      await sgMail.send(msg); // Use sgMail.send
+      console.log(`Food order confirmation email sent to ${email}`);
+    } catch (error) {
+      console.error(`Failed to send food order confirmation email to ${email}:`, error);
+      if (error.response) {
+        console.error(error.response.body);
       }
-    });
+    }
   }
 
   res.status(201).json(createdOrder);
@@ -393,13 +400,13 @@ app.post('/api/food-orders', async (req, res) => {
 // --- API Endpoints for Feedback ---
 app.post('/api/feedback', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  
+
   const feedbackData = req.body;
   const newFeedback = {
     ...feedbackData,
     submittedAt: new Date().toISOString()
   };
-  
+
   await db.collection('feedback').insertOne(newFeedback);
 
   const { name, email, category, message } = feedbackData;
@@ -422,20 +429,22 @@ app.post('/api/feedback', async (req, res) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
+    const msg = { // Renamed to 'msg'
       to: email,
+      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
       subject: `We've Received Your Feedback`,
       html: emailHtml,
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(`Failed to send feedback confirmation email to ${email}:`, error);
-      } else {
-        console.log(`Feedback confirmation email sent to ${email}: ${info.response}`);
+    try {
+      await sgMail.send(msg); // Use sgMail.send
+      console.log(`Feedback confirmation email sent to ${email}`);
+    } catch (error) {
+      console.error(`Failed to send feedback confirmation email to ${email}:`, error);
+      if (error.response) {
+        console.error(error.response.body);
       }
-    });
+    }
   }
 
   res.status(201).json({ message: 'Feedback submitted successfully' });
@@ -444,52 +453,55 @@ app.post('/api/feedback', async (req, res) => {
 
 // Sends Sign Up OTP and checks if user exists ---
 app.post('/api/send-signup-otp', async (req, res) => {
-    if (!db) return res.status(503).json({ message: 'Database not connected' });
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email is required' });
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: 'Email is required' });
 
-    try {
-        // 1. Check if a user with this email already exists
-        const existingUser = await db.collection('users').findOne({ email: email });
-        if (existingUser) {
-            return res.status(409).json({ message: 'An account with this email already exists.' });
-        }
-
-        // 2. Generate a 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        // 3. Create the email content
-        const mailOptions = {
-            from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
-            to: email,
-            subject: 'Your Verification Code for Yatra Saral',
-            html: `<div style="font-family: sans-serif; text-align: center; padding: 20px;">
-                <h2>Email Verification</h2>
-                <p>Thank you for signing up. Please use the following code to verify your email address:</p>
-                <p style="font-size: 24px; font-weight: bold; letter-spacing: 5px; background: #f0f0f0; padding: 10px; border-radius: 5px;">
-                  ${otp}
-                </p>
-              </div>`,
-        };
-
-        // 4. Send the email
-        await transporter.sendMail(mailOptions);
-        console.log('Signup OTP email sent to: ' + email);
-        
-        // 5. Respond to the frontend with the OTP for verification
-        res.status(200).json({ message: 'OTP sent successfully', otp: otp });
-
-    } catch (error) {
-        console.error('Failed to send signup OTP email:', error);
-        res.status(500).json({ message: 'Failed to send verification email.' });
+  try {
+    // 1. Check if a user with this email already exists
+    const existingUser = await db.collection('users').findOne({ email: email });
+    if (existingUser) {
+      return res.status(409).json({ message: 'An account with this email already exists.' });
     }
+
+    // 2. Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 3. Create the email content
+    const msg = { // Renamed to 'msg'
+      to: email,
+      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
+      subject: 'Your Verification Code for Yatra Saral',
+      html: `<div style="font-family: sans-serif; text-align: center; padding: 20px;">
+            <h2>Email Verification</h2>
+            <p>Thank you for signing up. Please use the following code to verify your email address:</p>
+            <p style="font-size: 24px; font-weight: bold; letter-spacing: 5px; background: #f0f0f0; padding: 10px; border-radius: 5px;">
+              ${otp}
+            </p>
+          </div>`,
+    };
+
+    // 4. Send the email
+    await sgMail.send(msg); // Use sgMail.send
+    console.log('Signup OTP email sent to: ' + email);
+
+    // 5. Respond to the frontend with the OTP for verification
+    res.status(200).json({ message: 'OTP sent successfully', otp: otp });
+
+  } catch (error) {
+    console.error('Failed to send signup OTP email:', error);
+    if (error.response) {
+      console.error(error.response.body);
+    }
+    res.status(500).json({ message: 'Failed to send verification email.' });
+  }
 });
 
 // --- Your existing Authentication endpoints ---
 app.post('/api/register', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   const { name, email, phone, password } = req.body;
-  
+
   const existingUser = await db.collection('users').findOne({ email: email });
   if (existingUser) {
     return res.status(409).json({ message: 'User with this email already exists.' });
@@ -500,10 +512,10 @@ app.post('/api/register', async (req, res) => {
 
   const result = await db.collection('users').insertOne({ name, email, phone, password: hashedPassword });
   const newUser = await db.collection('users').findOne({ _id: result.insertedId });
-  
+
   // Send welcome email after successful registration
   if (newUser) {
-    sendWelcomeEmail(newUser.email, newUser.name);
+    sendWelcomeEmail(newUser.email, newUser.name); // This function now uses SendGrid
   }
 
   delete newUser.password;
@@ -520,8 +532,8 @@ app.post('/api/login', async (req, res) => {
 
   if (user && passwordMatch) {
     // Send welcome email on successful login
-    sendWelcomeEmail(user.email, user.name);
-    
+    sendWelcomeEmail(user.email, user.name); // This function now uses SendGrid
+
     delete user.password;
     res.status(200).json(user);
   } else {
@@ -575,7 +587,7 @@ app.delete('/api/users/delete-account', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   const { email, password } = req.body;
   const user = await db.collection('users').findOne({ email: email });
-  
+
   const passwordMatch = user ? await bcrypt.compare(password, user.password) : false;
 
   if (!user || !passwordMatch) {
@@ -620,7 +632,7 @@ app.post('/api/bookings', async (req, res) => {
         introductoryParagraph = `Your booking for the Cloak Room is confirmed. You can now securely store your luggage at our facility.`;
         finalInstruction = `Please show this confirmation email and a valid photo ID at the Cloak Room counter to deposit your luggage.`;
         break;
-      
+
       case 'Coolie Service':
         introductoryParagraph = `Your request for a Coolie (Porter) is confirmed. A licensed porter will be available to assist you with your luggage.`;
         finalInstruction = `Please look for a licensed porter in a red uniform at your designated platform and show them this booking confirmation.`;
@@ -679,20 +691,22 @@ app.post('/api/bookings', async (req, res) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: `"Yatra Saral Services" <${process.env.EMAIL_USER}>`,
+    const msg = { // Renamed to 'msg'
       to: email,
+      from: `"Yatra Saral Services" <${process.env.EMAIL_USER}>`, // Verified sender
       subject: `Service Booking Confirmed [ID: ${createdBooking.id}]`,
       html: emailHtml,
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(`Failed to send service booking confirmation email to ${email}:`, error);
-      } else {
-        console.log(`Service booking confirmation email sent to ${email}: ${info.response}`);
+    try {
+      await sgMail.send(msg); // Use sgMail.send
+      console.log(`Service booking confirmation email sent to ${email}`);
+    } catch (error) {
+      console.error(`Failed to send service booking confirmation email to ${email}:`, error);
+      if (error.response) {
+        console.error(error.response.body);
       }
-    });
+    }
   }
 
   res.status(201).json(createdBooking);
@@ -827,20 +841,22 @@ app.post('/api/platform-tickets', async (req, res) => {
         </div>
     `;
 
-    const mailOptions = {
-        from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
-        to: email,
-        subject: `Your Platform Ticket for ${station}`,
-        html: ticketHtml,
+    const msg = { // Renamed to 'msg'
+      to: email,
+      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
+      subject: `Your Platform Ticket for ${station}`,
+      html: ticketHtml,
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            console.error(`Failed to send platform ticket email to ${email}:`, error);
-        } else {
-            console.log(`Platform ticket email sent to ${email}: ${info.response}`);
-        }
-    });
+    try {
+      await sgMail.send(msg); // Use sgMail.send
+      console.log(`Platform ticket email sent to ${email}`);
+    } catch (error) {
+      console.error(`Failed to send platform ticket email to ${email}:`, error);
+      if (error.response) {
+        console.error(error.response.body);
+      }
+    }
   }
 
   res.status(201).json(createdTicket);
@@ -910,20 +926,22 @@ app.post('/api/insurance-applications', async (req, res) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
+    const msg = { // Renamed to 'msg'
       to: email,
+      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
       subject: `Your Travel Insurance Application for ${destination} is Confirmed!`,
       html: emailHtml,
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(`Failed to send insurance confirmation email to ${email}:`, error);
-      } else {
-        console.log(`Insurance confirmation email sent to ${email}: ${info.response}`);
+    try {
+      await sgMail.send(msg); // Use sgMail.send
+      console.log(`Insurance confirmation email sent to ${email}`);
+    } catch (error) {
+      console.error(`Failed to send insurance confirmation email to ${email}:`, error);
+      if (error.response) {
+        console.error(error.response.body);
       }
-    });
+    }
   }
 
   res.status(201).json(createdApplication);
@@ -941,7 +959,7 @@ app.get('/api/seat-upgrades/:email', async (req, res) => {
 
 app.post('/api/seat-upgrades', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
-  
+
   const upgradeData = req.body;
   const upgradeId = 'UPG-' + Math.random().toString(36).substr(2, 9).toUpperCase();
   const newUpgradeRequest = {
@@ -962,7 +980,7 @@ app.post('/api/seat-upgrades', async (req, res) => {
 
     if (status === 'Confirmed Upgrade') {
       infoParagraph = `Congratulations! Your seat upgrade request has been successfully confirmed. Any fare difference, if applicable, will be collected by the TTE on board the train.`;
-    } else { 
+    } else {
       infoParagraph = `Your request to be on the waitlist for a seat upgrade has been received. You will be notified via email and SMS if an upgrade becomes available.`;
     }
 
@@ -1003,20 +1021,22 @@ app.post('/api/seat-upgrades', async (req, res) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: `"Yatra Saral Upgrades" <${process.env.EMAIL_USER}>`,
+    const msg = { // Renamed to 'msg'
       to: email,
+      from: `"Yatra Saral Upgrades" <${process.env.EMAIL_USER}>`, // Verified sender
       subject: `Seat Upgrade Update for PNR ${pnr} [ID: ${createdUpgrade.id}]`,
       html: emailHtml,
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(`Failed to send seat upgrade confirmation email to ${email}:`, error);
-      } else {
-        console.log(`Seat upgrade confirmation email sent to ${email}: ${info.response}`);
+    try {
+      await sgMail.send(msg); // Use sgMail.send
+      console.log(`Seat upgrade confirmation email sent to ${email}`);
+    } catch (error) {
+      console.error(`Failed to send seat upgrade confirmation email to ${email}:`, error);
+      if (error.response) {
+        console.error(error.response.body);
       }
-    });
+    }
   }
 
   res.status(201).json(createdUpgrade);
@@ -1085,65 +1105,68 @@ app.delete('/api/unsubscribe-alerts/:pnr', async (req, res) => {
 
 // --- NEW ENDPOINT for sending Budget Report Email ---
 app.post('/api/send-budget-report', async (req, res) => {
-    if (!db) return res.status(503).json({ message: 'Database not connected' });
+  if (!db) return res.status(503).json({ message: 'Database not connected' });
 
-    const { items, totalCost, email, name } = req.body;
+  const { items, totalCost, email, name } = req.body;
 
-    if (!email || !items || !Array.isArray(items) || totalCost === undefined) {
-        return res.status(400).json({ message: 'Missing required data for the report.' });
+  if (!email || !items || !Array.isArray(items) || totalCost === undefined) {
+    return res.status(400).json({ message: 'Missing required data for the report.' });
+  }
+
+  try {
+    const itemRows = items.map(item => `
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₹${item.cost.toFixed(2)}</td>
+        </tr>
+    `).join('');
+
+    const emailHtml = `
+        <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px; max-width: 600px; margin: auto; border-radius: 8px;">
+            <h1 style="color: #af19ff; text-align: center;">Your Trip Budget Report</h1>
+            <p>Hi ${name || 'there'},</p>
+            <p>Here is the budget you prepared for your upcoming trip using the Yatra Saral Budget Calculator.</p>
+            <hr>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="padding: 8px; text-align: left; background-color: #f8f9fa;">Category</th>
+                        <th style="padding: 8px; text-align: right; background-color: #f8f9fa;">Cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemRows}
+                </tbody>
+                <tfoot>
+                    <tr style="font-weight: bold; border-top: 2px solid #ddd;">
+                        <td style="padding: 10px;">Total Estimated Budget</td>
+                        <td style="padding: 10px; text-align: right; font-size: 18px; color: #af19ff;">₹${totalCost.toFixed(2)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <hr style="margin-top: 20px;">
+            <p style="text-align: center; font-size: 12px; color: #777;">Happy and safe travels!<br/>The Yatra Saral Team</p>
+        </div>
+    `;
+
+    const msg = { // Renamed to 'msg'
+      to: email,
+      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
+      subject: 'Your Yatra Saral Trip Budget Report',
+      html: emailHtml,
+    };
+
+    await sgMail.send(msg); // Use sgMail.send
+    console.log(`Budget report sent to: ${email}`);
+    res.status(200).json({ message: 'Report sent successfully' });
+
+  } catch (error) {
+    console.error('Failed to send budget report email:', error);
+    if (error.response) {
+      console.error(error.response.body);
     }
-
-    try {
-        const itemRows = items.map(item => `
-            <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₹${item.cost.toFixed(2)}</td>
-            </tr>
-        `).join('');
-
-        const emailHtml = `
-            <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px; max-width: 600px; margin: auto; border-radius: 8px;">
-                <h1 style="color: #af19ff; text-align: center;">Your Trip Budget Report</h1>
-                <p>Hi ${name || 'there'},</p>
-                <p>Here is the budget you prepared for your upcoming trip using the Yatra Saral Budget Calculator.</p>
-                <hr>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr>
-                            <th style="padding: 8px; text-align: left; background-color: #f8f9fa;">Category</th>
-                            <th style="padding: 8px; text-align: right; background-color: #f8f9fa;">Cost</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemRows}
-                    </tbody>
-                    <tfoot>
-                        <tr style="font-weight: bold; border-top: 2px solid #ddd;">
-                            <td style="padding: 10px;">Total Estimated Budget</td>
-                            <td style="padding: 10px; text-align: right; font-size: 18px; color: #af19ff;">₹${totalCost.toFixed(2)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-                <hr style="margin-top: 20px;">
-                <p style="text-align: center; font-size: 12px; color: #777;">Happy and safe travels!<br/>The Yatra Saral Team</p>
-            </div>
-        `;
-
-        const mailOptions = {
-            from: `"Yatra Saral" <${process.env.EMAIL_USER}>`,
-            to: email,
-            subject: 'Your Yatra Saral Trip Budget Report',
-            html: emailHtml,
-        };
-
-        await transporter.sendMail(mailOptions);
-        console.log(`Budget report sent to: ${email}`);
-        res.status(200).json({ message: 'Report sent successfully' });
-
-    } catch (error) {
-        console.error('Failed to send budget report email:', error);
-        res.status(500).json({ message: 'Failed to send report email.' });
-    }
+    res.status(500).json({ message: 'Failed to send report email.' });
+  }
 });
 
 // --- Travel Checklist Email Endpoint ---
@@ -1177,19 +1200,27 @@ app.post('/api/send-travel-checklist', async (req, res) => {
       </div>
     `;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    const msg = { // Renamed to 'msg'
       to: email,
+      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
       subject: "Your Travel Checklist - Yatra Saral",
       html: htmlContent,
-    });
+    };
+
+    await sgMail.send(msg); // Use sgMail.send
 
     res.json({ success: true, message: 'Travel checklist emailed successfully!' });
   } catch (error) {
     console.error("Error sending travel checklist:", error);
+    if (error.response) {
+      console.error(error.response.body);
+    }
     res.status(500).json({ message: 'Failed to send travel checklist email' });
   }
 });
+
+// --- NO LOGIN OTP ENDPOINT FOUND in your file, so I am not adding it ---
+// If you have a '/api/send-login-otp' endpoint, you must update it like I updated '/api/send-signup-otp'.
 
 
 const PORT = 5000;
