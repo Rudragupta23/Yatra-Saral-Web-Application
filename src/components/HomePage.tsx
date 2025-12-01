@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, useInView, animate } from 'framer-motion';
-import { Train, MapPin, Calendar, Shield, Star, Users, X } from 'lucide-react';
+import { Train, MapPin, Calendar, Shield, Star, Users, X, ExternalLink, Globe } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useToast } from './ui/use-toast';
 import { Button } from './ui/button';
@@ -305,6 +305,55 @@ const { toast } = useToast();
           </motion.div>
         </div>
       </section>
+      
+      {/* External Booking Link - Premium Alternative Booking Section (New Look) */}
+      <div className="py-16 bg-gray-100 dark:bg-gray-900 relative">
+        <div className="container mx-auto px-4 max-w-6xl">
+            <motion.div
+                initial={{ y: 30, opacity: 0 }}
+                whileInView={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.7, type: 'spring', stiffness: 100 }}
+                className="bg-card rounded-2xl p-8 border border-gray-200 dark:border-gray-800 shadow-xl shadow-gray-300/40 dark:shadow-black/50"
+            >
+                <div className="flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0 md:space-x-8">
+                    
+                    {/* Left side: Text and Icon - Value Retention Focused */}
+                    <div className="text-left flex-1 space-y-2">
+                        <div className="flex items-center space-x-3 mb-2">
+                            <Shield className="h-6 w-6 text-primary" />
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                Book Smarter with Yatra Saral
+                            </h3>
+                        </div>
+                        <p className="text-md text-muted-foreground italic max-w-lg">
+                            **Yatra Saral offers a seamless, feature-rich experience.** While Yatra Saral offers premium features, you can always go directly to the source for official Indian Railway Catering and Tourism Corporation (IRCTC) services.
+                        </p>
+                    </div>
+                    
+                    {/* Right side: Button (Alternative Call to Action) */}
+                    <div className="flex-shrink-0 w-full md:w-auto">
+                        <a
+                            href="https://www.irctc.co.in/nget/train-search"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            // Button color is the theme color via gradient-primary
+                            className="inline-flex items-center justify-center w-full 
+                                       gradient-primary text-white px-8 py-3 rounded-xl 
+                                       font-bold text-lg shadow-xl transition-all duration-300
+                                       hover:shadow-primary/50 transform hover:scale-[1.03]"
+                        >
+                            <Train className="h-5 w-5 mr-3" />
+                            Use Direct IRCTC Link
+                            <ExternalLink className="h-4 w-4 ml-2" />
+                        </a>
+                        <p className="text-xs text-muted-foreground mt-2 text-center">
+                            (Alternative link, opens in a new tab)
+                        </p>
+                    </div>
+                </div>
+            </motion.div>
+        </div>
+      </div>
     </div>
   );
 };
