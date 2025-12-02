@@ -52,8 +52,39 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const SESSION_TIMEOUT_SECONDS = 10 * 60; 
+const SESSION_TIMEOUT_SECONDS = 600; 
 const INACTIVITY_TIMEOUT_MS = SESSION_TIMEOUT_SECONDS * 1000;
+
+
+const checkAndPurgeExpiredSession = () => {
+  const savedUser = localStorage.getItem('yatra-user');
+  const storedLastActivity = localStorage.getItem('yatra-last-activity');
+
+  if (savedUser && storedLastActivity) {
+    const lastActivityTime = Number(storedLastActivity);
+    const currentTime = Date.now();
+    const timeElapsed = currentTime - lastActivityTime;
+    
+    if (timeElapsed > INACTIVITY_TIMEOUT_MS) {
+      console.log("Pre-mount check: Session expired. Purging user data.");
+      localStorage.removeItem('yatra-user');
+      localStorage.removeItem('yatra-last-activity');
+      return { user: null, expired: true };
+    }
+    
+    localStorage.setItem('yatra-last-activity', String(currentTime));
+    return { user: JSON.parse(savedUser) as User, expired: false };
+
+  } else if (savedUser && !storedLastActivity) {
+    localStorage.removeItem('yatra-user');
+    return { user: null, expired: true };
+  }
+
+  return { user: null, expired: false };
+};
+
+const { user: initialUser, expired: initialSessionExpired } = checkAndPurgeExpiredSession();
+
 
 const translations = {
   en: {
@@ -158,7 +189,7 @@ const translations = {
     'about.mission.title': 'Our Mission',
     'about.mission.desc': 'My mission with Yatra Saral is to design a platform that makes train travel feel seamless and stress-free. By simplifying booking and journey management through thoughtful design, I aim to create an experience that prioritizes efficiency, accessibility, and ease of use for all travelers.',
     'about.vision.title': 'Our Vision',
-    'about.vision.desc': 'The vision behind Yatra Saral is to set a benchmark for how train travel platforms can be designed—prioritizing trust, innovation, and user satisfaction. I want it to represent not just a service, but a design approach that makes travel planning intuitive and enjoyable.',
+    'about.vision.desc': 'The vision behind Yatra Saral is to set a benchmark for how train travel platforms can be designed—prorioritizing trust, innovation, and user satisfaction. I want it to represent not just a service, but a design approach that makes travel planning intuitive and enjoyable.',
     'about.story.title': 'Our Story',
     'about.story.desc': 'Yatra Saral began as a design project fueled by creativity and curiosity. As its creator, I wanted to craft a platform that reimagines the train travel experience—not just as a utility, but as something simple, user-friendly, and accessible. The idea behind Yatra Saral was to experiment with design thinking, problem-solving, and to showcase how technology can make journeys smoother, even in their simplest form.',
     'about.cta.title': 'Join Us on Our Journey',
@@ -289,59 +320,33 @@ const translations = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(initialUser); 
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [language, setLanguage] = useState<'en' | 'hi'>('en');
+  const [language, setLanguageState] = useState<'en' | 'hi'>('en');
   const [fontSize, setFontSize] = useState<FontSize>('16px');
-  const [authModal, setAuthModal] = useState<AuthModalState>({ isOpen: false, view: 'login' });
+  const [authModal, setAuthModal] = useState<AuthModalState>({ isOpen: initialSessionExpired, view: 'login' });
   const [isReadAloudEnabled, setIsReadAloudEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const [remainingSessionTime, setRemainingSessionTime] = useState(SESSION_TIMEOUT_SECONDS);
   
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('yatra-theme') as 'light' | 'dark';
     const savedLanguage = localStorage.getItem('yatra-language') as 'en' | 'hi';
     const savedFontSize = localStorage.getItem('yatra-fontSize') as FontSize;
-    const savedUser = localStorage.getItem('yatra-user');
-    const storedLastActivity = localStorage.getItem('yatra-last-activity');
-
-    let isSessionExpired = false;
-    let userObject = null;
-
-    if (savedUser && storedLastActivity) {
-      const lastActivityTime = Number(storedLastActivity);
-      const currentTime = Date.now();
-      const timeElapsed = currentTime - lastActivityTime;
-      
-      if (timeElapsed > INACTIVITY_TIMEOUT_MS) {
-        console.log("Immediate check: Session expired. Clearing user data.");
-        localStorage.removeItem('yatra-user');
-        localStorage.removeItem('yatra-last-activity');
-        isSessionExpired = true;
-      } else {
-        userObject = JSON.parse(savedUser);
-      }
-    } else if (savedUser && !storedLastActivity) {
-      localStorage.removeItem('yatra-user');
-      isSessionExpired = true;
-    }
 
     if (savedTheme) setTheme(savedTheme);
-    if (savedLanguage) setLanguage(savedLanguage);
+    if (savedLanguage) setLanguageState(savedLanguage);
     if (savedFontSize) setFontSize(savedFontSize);
-    
-    if (userObject) {
-      setUser(userObject);
-      localStorage.setItem('yatra-last-activity', String(Date.now()));
-    } else {
-      setUser(null);
-    }
-    
-    if (isSessionExpired) {
-       setAuthModal(prev => ({ ...prev, isOpen: true, view: 'login' }));
-    }
 
+    const storedLastActivity = localStorage.getItem('yatra-last-activity');
+    if (storedLastActivity && initialUser) {
+        const lastActivityTime = Number(storedLastActivity);
+        const timeSinceActivity = Date.now() - lastActivityTime;
+        const remainingTime = Math.max(0, Math.floor((INACTIVITY_TIMEOUT_MS - timeSinceActivity) / 1000));
+        setRemainingSessionTime(remainingTime);
+    }
   }, []); 
 
   useEffect(() => {
@@ -388,7 +393,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('yatra-last-activity'); 
     setAuthModal(prev => ({ ...prev, isOpen: true, view: 'login' })); 
   };
-
+  
+  const setLanguage = (lang: 'en' | 'hi') => {
+    setLanguageState(lang);
+  };
+  
   useEffect(() => {
     const updateActivityTime = () => {
       if (user) { 
@@ -428,8 +437,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setRemainingSessionTime(Math.max(0, Math.floor(remainingTimeMS / 1000)));
         }
       }, 1000) as any;
-
-      setRemainingSessionTime(SESSION_TIMEOUT_SECONDS);
 
     } else {
       setRemainingSessionTime(SESSION_TIMEOUT_SECONDS);
@@ -471,7 +478,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetSettings = () => {
     setTheme('light');
-    setLanguage('en');
+    setLanguageState('en');
     setFontSize('16px');
 
     localStorage.removeItem('yatra-theme');
