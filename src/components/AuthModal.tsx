@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { X, Eye, EyeOff, Loader2, Clock } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useApp } from '../contexts/AppContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useToast } from '../hooks/use-toast';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from './ui/alert';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -22,7 +27,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [resetCode, setResetCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // NEW STATES for Sign Up OTP
   const [signupData, setSignupData] = useState<any>(null);
   const [signupOtp, setSignupOtp] = useState('');
   const [serverOtp, setServerOtp] = useState('');
@@ -55,12 +59,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   }, [user, logout, toast]);
 
-  //  Handle Sign In
   const handleAuthSubmit = async (data: any) => {
     setIsSubmitting(true);
     try {
       if (view === 'signUp') {
-        // Step 1: Send OTP first
         const otpRes = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/send-signup-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -69,13 +71,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         const otpResult = await otpRes.json();
         if (!otpRes.ok) throw new Error(otpResult.message || 'Failed to send OTP');
         setServerOtp(otpResult.otp);
-        setSignupData(data); // Save signup details temporarily
+        setSignupData(data); 
         setView('verifyOtp');
         toast({ title: "OTP Sent", description: "Check your email for the verification code." });
         return;
       }
 
-      // Normal Sign In
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,7 +100,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  //  Handle OTP Verification & Final Registration
   const handleVerifyOtp = async () => {
     if (signupOtp !== serverOtp) {
       toast({ title: "Invalid OTP", description: "The code you entered is incorrect.", variant: "destructive" });
@@ -173,12 +173,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  //  Forms rendering
   const renderForm = () => {
     if (view === 'verifyOtp') {
       return (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Enter the 6-digit code sent to {signupData?.email}</p>
+          <p className="text-sm text-muted-foreground text-center">Enter the 6-digit code sent to *{signupData?.email}*</p>
+
+          <Alert className="bg-card shadow-lg border border-primary/30 rounded-xl p-4 flex items-start space-x-3">
+            <div>
+              <AlertTitle className="text-base font-bold text-primary">
+                OTP Taking Time?
+              </AlertTitle>
+              <AlertDescription className="text-sm text-foreground/85">
+                Please check your **Spam or Junk folder** immediately. Your verification email may have been filtered there.
+              </AlertDescription>
+            </div>
+          </Alert>
+
           <div className="space-y-2">
             <Label htmlFor="otp">Verification Code</Label>
             <Input id="otp" value={signupOtp} onChange={e => setSignupOtp(e.target.value)} placeholder="Enter OTP" />
