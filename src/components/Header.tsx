@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Menu, User, LogOut, TramFront, AlertTriangle, Edit2, Check, Camera, Settings } from 'lucide-react'; 
 import { useApp } from '../contexts/AppContext';
@@ -56,29 +56,52 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const { user, logout, t, remainingSessionTime } = useApp();
   
-  const getInitialName = () => {
-      const savedName = localStorage.getItem('yatraSaral_displayName');
-      return savedName || user?.name || '';
-  };
-  const getInitialAvatar = () => {
-      return localStorage.getItem('yatraSaral_profilePic') || null;
+  const getUserKey = (key: string): string | null => {
+      return user?.name ? `yatraSaral_${key}_${user.name.replace(/\s/g, '_')}` : null;
   };
 
-  const initialUserName = getInitialName();
   const [isRenaming, setIsRenaming] = useState(false);
-  const [displayUserName, setDisplayUserName] = useState(initialUserName);
-  const [newName, setNewName] = useState(initialUserName);
-  
-  const [profilePicture, setProfilePicture] = useState(getInitialAvatar());
+  const [displayUserName, setDisplayUserName] = useState('Traveler');
+  const [newName, setNewName] = useState('Traveler');
+  const [profilePicture, setProfilePicture] = useState(null);
   const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false);
 
   
+  useEffect(() => {
+    if (user) {
+        const nameKey = getUserKey('displayName');
+        const picKey = getUserKey('profilePic');
+        
+        const savedName = nameKey ? localStorage.getItem(nameKey) : null;
+        const savedPic = picKey ? localStorage.getItem(picKey) : null;
+        const contextName = user.name || "Traveler";
+
+        if (savedName) {
+            setDisplayUserName(savedName);
+            setNewName(savedName);
+        } else {
+            setDisplayUserName(contextName);
+            setNewName(contextName);
+        }
+        
+        setProfilePicture(savedPic);
+
+    } else {
+        setDisplayUserName("Traveler");
+        setNewName("Traveler");
+        setProfilePicture(null);
+    }
+  }, [user?.name, user]); 
+
   const isValidName = /^[a-zA-Z\s]{1,14}$/.test(newName.trim());
   
   const handleSaveName = () => {
     if (isValidName) {
       const trimmedName = newName.trim();
-      localStorage.setItem('yatraSaral_displayName', trimmedName);
+      const nameKey = getUserKey('displayName');
+      if (nameKey) {
+        localStorage.setItem(nameKey, trimmedName);
+      }
       setDisplayUserName(trimmedName);
       setIsRenaming(false);
     }
@@ -90,7 +113,10 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => 
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64Image = reader.result as string;
-        localStorage.setItem('yatraSaral_profilePic', base64Image);
+        const picKey = getUserKey('profilePic');
+        if (picKey) {
+          localStorage.setItem(picKey, base64Image);
+        }
         setProfilePicture(base64Image);
       };
       if (file.size > 2097152) {
@@ -224,7 +250,12 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => 
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Stay Logged In</AlertDialogCancel>
-                        <AlertDialogAction onClick={logout} className="bg-destructive hover:bg-destructive/90">
+                        <AlertDialogAction 
+                          onClick={() => {
+                            logout();
+                          }} 
+                          className="bg-destructive hover:bg-destructive/90"
+                        >
                           Confirm Logout
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -283,7 +314,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => 
                     <Button 
                         variant="destructive" 
                         onClick={() => {
-                            localStorage.removeItem('yatraSaral_profilePic');
+                            localStorage.removeItem(getUserKey('profilePic')!);
                             setProfilePicture(null);
                         }}
                         disabled={!profilePicture}
