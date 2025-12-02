@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Menu, User, LogOut, TramFront } from 'lucide-react';
+import { Menu, User, LogOut, TramFront } from 'lucide-react'; 
 import { useApp } from '../contexts/AppContext';
 import { Button } from './ui/button';
 import { Sidebar } from './Sidebar';
@@ -11,10 +11,16 @@ interface HeaderProps {
   activeSection: string; 
 }
 
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
 export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const { user, logout, t } = useApp();
+  const { user, logout, t, remainingSessionTime } = useApp();
 
   const navItems = [
     { id: 'home', label: t('nav.home') },
@@ -30,7 +36,8 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => 
         className="fixed top-0 left-0 right-0 bg-gradient-to-r from-gray-800 to-black text-white shadow-lg z-30"
       >
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
+          <div className="relative flex items-center justify-between h-16">
+            
             <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
@@ -44,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => 
               <motion.button
                 onClick={() => onNavigate('home')}
                 className="flex items-center gap-2 text-2xl font-bold text-white"
-                whileHover={{ scale: 1.05, color: '#e5e7eb' /* gray-200 */ }}
+                whileHover={{ scale: 1.05, color: '#e5e7eb' }}
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 17 }}
               >
@@ -53,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => 
               </motion.button>
             </div>
 
-            <nav className="hidden md:flex items-center gap-2">
+            <nav className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2">
               {navItems.map((item) => (
                 <div key={item.id} className="relative">
                   <button
@@ -76,6 +83,12 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, activeSection }) => 
             <div className="flex items-center gap-2">
               {user ? (
                 <div className="flex items-center gap-2">
+                  {remainingSessionTime > 0 && (
+                    <div className="text-sm font-semibold text-gray-300 bg-black/40 px-3 py-1 rounded-full shadow-inner transition-colors duration-200">
+                      {t('session.time.label')} {formatTime(remainingSessionTime)}
+                    </div>
+                  )}
+                  
                   <span className="text-sm text-gray-300 hidden sm:block">
                     {user.name}
                   </span>
