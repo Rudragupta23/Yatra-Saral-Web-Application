@@ -8,7 +8,6 @@ import heroBg1 from '../assets/p1.jpg';
 import heroBg2 from '../assets/p2.jpg';
 import heroBg3 from '../assets/p3.jpg';
 
-// NEW IMPORT: Import Dialog components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from './ui/dialog';
 
 interface HomePageProps {
@@ -65,7 +64,6 @@ const { user, t, setAuthModal } = useApp();
 const { toast } = useToast();
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
   const [showPopup, setShowPopup] = useState(false);
-  // NEW STATE: State to control the external link dialog
   const [isIrctcDialogOpen, setIsIrctcDialogOpen] = useState(false);
   
   const backgroundImages = [heroBg1, heroBg2, heroBg3];
@@ -119,7 +117,6 @@ const { toast } = useToast();
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         {backgroundImages.map((bg, index) => (
           <motion.div
@@ -209,7 +206,6 @@ const { toast } = useToast();
         </motion.div>
       </section>
 
-      {/* Features Section */}
       <section className="py-20 bg-background">
         <div className="container mx-auto px-4">
           <motion.div
@@ -246,7 +242,6 @@ const { toast } = useToast();
         </div>
       </section>
 
-      {/* Stats Section */}
       <section className="py-20 gradient-primary text-white">
         <div className="container mx-auto px-4">
           <motion.div
@@ -283,7 +278,6 @@ const { toast } = useToast();
         </div>
       </section>
 
-      {/* CTA Section */}
       <section className="py-20 bg-muted">
         <div className="container mx-auto px-4 text-center">
           <motion.div
@@ -311,7 +305,6 @@ const { toast } = useToast();
         </div>
       </section>
       
-      {/* External Booking Link - Premium Alternative Booking Section (New Look) */}
       <div className="py-16 bg-gray-100 dark:bg-gray-900 relative">
         <div className="container mx-auto px-4 max-w-6xl">
             <motion.div
@@ -322,7 +315,6 @@ const { toast } = useToast();
             >
                 <div className="flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0 md:space-x-8">
                     
-                    {/* Left side: Text and Icon - Value Retention Focused */}
                     <div className="text-left flex-1 space-y-2">
                         <div className="flex items-center space-x-3 mb-2">
                             <Shield className="h-6 w-6 text-primary" />
@@ -335,11 +327,9 @@ const { toast } = useToast();
                         </p>
                     </div>
                     
-                    {/* Right side: Button (Alternative Call to Action) - MODIFIED FOR DIALOG */}
                     <div className="flex-shrink-0 w-full md:w-auto">
                         <Dialog open={isIrctcDialogOpen} onOpenChange={setIsIrctcDialogOpen}>
                             <DialogTrigger asChild>
-                                {/* Replicate button styling on a button element to act as the trigger */}
                                 <button
                                     className="inline-flex items-center justify-center w-full 
                                                gradient-primary text-white px-8 py-3 rounded-xl 
@@ -351,7 +341,6 @@ const { toast } = useToast();
                                     <ExternalLink className="h-4 w-4 ml-2" />
                                 </button>
                             </DialogTrigger>
-                            {/* ENHANCED DIALOG CONTENT for better visual appeal and text */}
                             <DialogContent className="sm:max-w-lg p-0 overflow-hidden"> 
                                 <DialogHeader className="p-6 bg-yellow-50 dark:bg-gray-800 border-b border-yellow-200 dark:border-gray-700">
                                     <DialogTitle className="text-2xl font-bold text-yellow-800 dark:text-yellow-400 flex items-center">
@@ -396,7 +385,6 @@ const { toast } = useToast();
                                     </a>
                                 </DialogFooter>
                             </DialogContent>
-                            {/* END ENHANCED DIALOG CONTENT */}
                         </Dialog>
                         <p className="text-xs text-muted-foreground mt-2 text-center">
                             (Alternative link, opens in a new tab)
