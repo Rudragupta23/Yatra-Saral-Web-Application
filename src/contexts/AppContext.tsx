@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 interface AuthModalState {
   isOpen: boolean;
@@ -43,14 +43,17 @@ interface AppContextType {
   speak: (text: string, lang: 'en-US' | 'hi-IN') => void;
   cancelSpeak: () => void;
   
-  // Translations
   t: (key: string) => string;
 
-  // New Reset Function
   resetSettings: () => void;
+
+  remainingSessionTime: number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const SESSION_TIMEOUT_SECONDS = 10 * 60; 
+const INACTIVITY_TIMEOUT_MS = SESSION_TIMEOUT_SECONDS * 1000;
 
 const translations = {
   en: {
@@ -60,6 +63,7 @@ const translations = {
     'nav.home': 'Home',
     'nav.about': 'About Us',
     'nav.services': 'Services',
+    'session.time.label': 'Session:', 
     'nav.profile': 'Profile',
     'menu.darkMode': 'Dark Mode',
     'menu.lightMode': 'Light Mode',
@@ -165,7 +169,7 @@ const translations = {
     'pantry.title': 'Pantry Food',
     'pantry.subtitle': 'Order fresh, delicious meals delivered directly to your seat during the journey',
     'group.booking.title': 'Group Booking',
-    'group.booking.subtitle': 'Easily book tickets for large groups and enjoy special discounts'
+    'group.booking.subtitle': 'Easily book tickets for large groups and enjoy special discounts',
   },
   hi: {
     'site.name': 'Yatra Saral',
@@ -174,6 +178,7 @@ const translations = {
     'nav.home': 'होम',
     'nav.about': 'हमारे बारे में',
     'nav.services': 'सेवाएं',
+    'session.time.label': 'सत्र:',
     'nav.profile': 'प्रोफाइल',
     'menu.darkMode': 'डार्क मोड',
     'menu.lightMode': 'लाइट मोड',
@@ -279,7 +284,7 @@ const translations = {
     'pantry.title': 'पैंट्री फूड',
     'pantry.subtitle': 'यात्रा के दौरान सीधे अपनी सीट पर ताजा, स्वादिष्ट भोजन ऑर्डर करें',
     'group.booking.title': 'समूह बुकिंग',
-    'group.booking.subtitle': 'बड़े समूहों के लिए आसानी से टिकट बुक करें और विशेष छूट का आनंद लें'
+    'group.booking.subtitle': 'बड़े समूहों के लिए आसानी से टिकट बुक करें और विशेष छूट का आनंद लें',
   },
 };
 
@@ -292,27 +297,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isReadAloudEnabled, setIsReadAloudEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  const [remainingSessionTime, setRemainingSessionTime] = useState(SESSION_TIMEOUT_SECONDS);
+  
   useEffect(() => {
-    // Load saved preferences
     const savedTheme = localStorage.getItem('yatra-theme') as 'light' | 'dark';
     const savedLanguage = localStorage.getItem('yatra-language') as 'en' | 'hi';
     const savedFontSize = localStorage.getItem('yatra-fontSize') as FontSize;
     const savedUser = localStorage.getItem('yatra-user');
+    const storedLastActivity = localStorage.getItem('yatra-last-activity');
+
+    let isSessionExpired = false;
+    let userObject = null;
+
+    if (savedUser && storedLastActivity) {
+      const lastActivityTime = Number(storedLastActivity);
+      const currentTime = Date.now();
+      const timeElapsed = currentTime - lastActivityTime;
+      
+      if (timeElapsed > INACTIVITY_TIMEOUT_MS) {
+        console.log("Immediate check: Session expired. Clearing user data.");
+        localStorage.removeItem('yatra-user');
+        localStorage.removeItem('yatra-last-activity');
+        isSessionExpired = true;
+      } else {
+        userObject = JSON.parse(savedUser);
+      }
+    } else if (savedUser && !storedLastActivity) {
+      localStorage.removeItem('yatra-user');
+      isSessionExpired = true;
+    }
 
     if (savedTheme) setTheme(savedTheme);
     if (savedLanguage) setLanguage(savedLanguage);
     if (savedFontSize) setFontSize(savedFontSize);
-    if (savedUser) setUser(JSON.parse(savedUser));
-  }, []);
+    
+    if (userObject) {
+      setUser(userObject);
+      localStorage.setItem('yatra-last-activity', String(Date.now()));
+    } else {
+      setUser(null);
+    }
+    
+    if (isSessionExpired) {
+       setAuthModal(prev => ({ ...prev, isOpen: true, view: 'login' }));
+    }
+
+  }, []); 
 
   useEffect(() => {
-    // Apply theme
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('yatra-theme', theme);
   }, [theme]);
 
   useEffect(() => {
-    // Apply font size
     document.documentElement.style.fontSize = fontSize;
     localStorage.setItem('yatra-fontSize', fontSize);
   }, [fontSize]);
@@ -329,6 +366,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (userObject && userObject.email) {
       setUser(userObject);
       localStorage.setItem('yatra-user', JSON.stringify(userObject));
+      localStorage.setItem('yatra-last-activity', String(Date.now()));
       return true; 
     }
     return false; 
@@ -338,6 +376,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (userObject && userObject.email) {
       setUser(userObject);
       localStorage.setItem('yatra-user', JSON.stringify(userObject));
+      localStorage.setItem('yatra-last-activity', String(Date.now()));
       return true;
     }
     return false;
@@ -346,7 +385,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('yatra-user');
+    localStorage.removeItem('yatra-last-activity'); 
+    setAuthModal(prev => ({ ...prev, isOpen: true, view: 'login' })); 
   };
+
+  useEffect(() => {
+    const updateActivityTime = () => {
+      if (user) { 
+         localStorage.setItem('yatra-last-activity', String(Date.now()));
+      }
+    };
+
+    const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
+
+    let intervalId: number;
+
+    if (user) {
+      
+      activityEvents.forEach(event => {
+        window.addEventListener(event, updateActivityTime);
+      });
+
+      intervalId = setInterval(() => {
+        const lastActivityTimeStored = localStorage.getItem('yatra-last-activity');
+        
+        if (!lastActivityTimeStored || !user) {
+             clearInterval(intervalId);
+             logout();
+             return;
+        }
+
+        const lastActivityTime = Number(lastActivityTimeStored);
+        const timeSinceActivity = Date.now() - lastActivityTime;
+        const remainingTimeMS = INACTIVITY_TIMEOUT_MS - timeSinceActivity;
+
+        if (remainingTimeMS <= 0) {
+          clearInterval(intervalId);
+          setRemainingSessionTime(0);
+          logout();
+          console.log("Auto-logout due to inactivity.");
+        } else {
+          setRemainingSessionTime(Math.max(0, Math.floor(remainingTimeMS / 1000)));
+        }
+      }, 1000) as any;
+
+      setRemainingSessionTime(SESSION_TIMEOUT_SECONDS);
+
+    } else {
+      setRemainingSessionTime(SESSION_TIMEOUT_SECONDS);
+      localStorage.removeItem('yatra-last-activity'); 
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, updateActivityTime);
+      });
+    };
+  }, [user]); 
 
   const speak = (text: string, lang: 'en-US' | 'hi-IN') => {
     if (window.speechSynthesis.speaking) {
@@ -391,7 +489,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isSpeaking, speak, cancelSpeak,
       t,
       authModal, setAuthModal,
-      resetSettings 
+      resetSettings,
+      remainingSessionTime
     }}>
       {children}
     </AppContext.Provider>
