@@ -77,6 +77,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         return;
       }
 
+      // Normal Sign In
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -100,6 +101,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  //  Handle OTP Verification & Final Registration
   const handleVerifyOtp = async () => {
     if (signupOtp !== serverOtp) {
       toast({ title: "Invalid OTP", description: "The code you entered is incorrect.", variant: "destructive" });
@@ -177,9 +179,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     if (view === 'verifyOtp') {
       return (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground text-center">Enter the 6-digit code sent to *{signupData?.email}*</p>
+          <p className="text-sm text-muted-foreground text-center">Enter the 6-digit code sent to **{signupData?.email}**</p>
 
           <Alert className="bg-card shadow-lg border border-primary/30 rounded-xl p-4 flex items-start space-x-3">
+            <Clock className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
             <div>
               <AlertTitle className="text-base font-bold text-primary">
                 OTP Taking Time?
@@ -222,6 +225,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     if (view === 'resetPassword') {
       return (
         <form onSubmit={handleSubmit(handleResetPassword)} className="space-y-4">
+          
+          <Alert className="bg-card shadow-lg border border-primary/30 rounded-xl p-4 flex items-start space-x-3">
+            <div>
+              <AlertTitle className="text-base font-bold text-primary">
+                Code Sent! Check Your Inbox.
+              </AlertTitle>
+              <AlertDescription className="text-sm text-foreground/85">
+                If the email hasn't arrived, please check your **Spam or Junk folder** immediately. The reset mail may have been filtered.
+              </AlertDescription>
+            </div>
+          </Alert>
+
           <p className="text-sm text-muted-foreground">A 6-digit code was sent to {emailToReset}.</p>
           <div className="space-y-2">
             <Label htmlFor="code">Verification Code</Label>
