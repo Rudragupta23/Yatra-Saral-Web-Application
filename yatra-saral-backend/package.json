@@ -7,7 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@sendgrid/mail": "^8.1.6",
+    "@getbrevo/brevo": "^3.0.1",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
@@ -16,6 +16,7 @@
     "mongodb": "^6.19.0",
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
-    "nodemailer": "^6.10.1"
+    "nodemailer": "^7.0.12"
   }
 }
+
