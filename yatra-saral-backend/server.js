@@ -1,17 +1,18 @@
 require('dotenv').config();
 const express = require('express');
-// const nodemailer = require('nodemailer'); // No longer needed
-const sgMail = require('@sendgrid/mail'); // Use SendGrid
-sgMail.setApiKey(process.env.SENDGRID_API_KEY); // Set the API key
+const Brevo = require('@getbrevo/brevo'); // Added Brevo
 const cors = require('cors');
 const { MongoClient, ObjectId } = require('mongodb');
 const cron = require('node-cron');
 const bcrypt = require('bcrypt');
 
-
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// --- Brevo Initialization ---
+const apiInstance = new Brevo.TransactionalEmailsApi();
+apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
 // --- Database Connection ---
 const client = new MongoClient(process.env.MONGO_URI);
@@ -24,16 +25,26 @@ client.connect()
   })
   .catch(err => console.error('Failed to connect to MongoDB', err));
 
-// Nodemailer setup - DELETED
+// --- Helper function for Brevo Emails ---
+const sendBrevoEmail = async (toEmail, subject, htmlContent, toName = "User") => {
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.htmlContent = htmlContent;
+  sendSmtpEmail.sender = { "name": "Yatra Saral", "email": process.env.EMAIL_USER };
+  sendSmtpEmail.to = [{ "email": toEmail, "name": toName }];
 
-// --- NEW: Helper function to send a welcome email ---
+  try {
+    await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`Email sent successfully to ${toEmail}`);
+    return true;
+  } catch (error) {
+    console.error(`Failed to send email to ${toEmail}:`, error);
+    return false;
+  }
+};
+
 const sendWelcomeEmail = async (email, name) => {
-  // Renamed to 'msg' for SendGrid
-  const msg = {
-    to: email,
-    from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Must be your verified SendGrid sender
-    subject: `Welcome to Yatra Saral, ${name}!`,
-    html: `
+  const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
         <div style="max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h1 style="color: #0d6efd; text-align: center;">Welcome, ${name}!</h1>
@@ -48,22 +59,11 @@ const sendWelcomeEmail = async (email, name) => {
           <p>Happy travels,<br/>The Yatra Saral Team</p>
         </div>
       </div>
-    `,
-  };
-
-  try {
-    await sgMail.send(msg); // Use sgMail.send
-    console.log(`Welcome email sent to ${email}`);
-  } catch (error) {
-    console.error(`Failed to send welcome email to ${email}:`, error);
-    if (error.response) {
-      console.error(error.response.body);
-    }
-  }
+    `;
+  await sendBrevoEmail(email, `Welcome to Yatra Saral, ${name}!`, html, name);
 };
 
-
-// This task will run at the beginning of every hour.
+// Hourly check for travel alerts
 cron.schedule('0 * * * *', async () => {
   console.log('Running hourly check for travel alerts...');
   if (!db) {
@@ -74,14 +74,12 @@ cron.schedule('0 * * * *', async () => {
   const now = new Date();
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
-  const tomorrowDateString = tomorrow.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+  const tomorrowDateString = tomorrow.toISOString().split('T')[0];
 
-  // Find all subscriptions for journeys happening tomorrow
   const subscriptions = await db.collection('alertSubscriptions').find({
     journeyDate: tomorrowDateString
   }).toArray();
 
-  //  Will tell you if the server is finding any subscriptions to process.
   console.log(`Found ${subscriptions.length} subscriptions for journeys on ${tomorrowDateString}.`);
 
   for (const sub of subscriptions) {
@@ -95,31 +93,17 @@ cron.schedule('0 * * * *', async () => {
     ];
     const randomStatus = possibleStatuses[Math.floor(Math.random() * possibleStatuses.length)];
 
-    const msg = { // Renamed to 'msg'
-      to: sub.email,
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: `Hourly Update for Train #${sub.trainNumber}`,
-      html: `<div style="font-family: sans-serif; padding: 20px;">
+    const html = `<div style="font-family: sans-serif; padding: 20px;">
               <p>Hi there,</p>
               <p>This is your hourly update for PNR ${sub.pnr}.</p>
               <p><b>Current Status:</b> Your train ${randomStatus}</p>
               <p>We will keep you updated.</p>
               <p>Thanks,<br/>Yatra Saral Team</p>
-              </div>`
-    };
+              </div>`;
 
-    try {
-      await sgMail.send(msg); // Use sgMail.send
-      console.log(`Alert sent to ${sub.email}`);
-    } catch (error) {
-      console.error(`Failed to send alert to ${sub.email}:`, error);
-      if (error.response) {
-        console.error(error.response.body);
-      }
-    }
+    await sendBrevoEmail(sub.email, `Hourly Update for Train #${sub.trainNumber}`, html);
   }
 });
-
 
 // ---------------- Weather API Proxy ----------------
 app.get('/api/weather', async (req, res) => {
@@ -150,35 +134,25 @@ app.get('/api/weather', async (req, res) => {
 });
 
 // ---------------- Forgot Password ----------------
-app.post('/send-reset-code', async (req, res) => { // Made async
+app.post('/send-reset-code', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: 'Email is required' });
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   
-  const msg = { // Renamed to 'msg'
-    to: email,
-    from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-    subject: 'Your Yatra Saral Password Reset Code',
-    html: `<div style="font-family: sans-serif; text-align: center; padding: 20px;">
+  const html = `<div style="font-family: sans-serif; text-align: center; padding: 20px;">
       <h2>Password Reset</h2>
       <p>Your 6-digit verification code is:</p>
       <p style="font-size: 24px; font-weight: bold; letter-spacing: 5px; background: #f0f0f0; padding: 10px; border-radius: 5px;">
         ${code}
       </p>
       <p>This code will expire in 10 minutes.</p>
-    </div>`,
-  };
+    </div>`;
 
-  try {
-    await sgMail.send(msg); // Use sgMail.send
-    console.log('Email sent: ' + email);
+  const success = await sendBrevoEmail(email, 'Your Yatra Saral Password Reset Code', html);
+  if (success) {
     res.status(200).json({ message: 'Email sent successfully', code: code });
-  } catch (error) {
-    console.log(error);
-    if (error.response) {
-      console.error(error.response.body);
-    }
-    return res.status(500).json({ message: 'Failed to send email' });
+  } else {
+    res.status(500).json({ message: 'Failed to send email' });
   }
 });
 
@@ -247,7 +221,6 @@ app.post('/api/complaints', async (req, res) => {
   const result = await db.collection('complaints').insertOne(newComplaint);
   const createdComplaint = await db.collection('complaints').findOne({ _id: result.insertedId });
 
-
   const { name, email, category, description, pnr } = complaintData;
 
   if (email) {
@@ -269,25 +242,8 @@ app.post('/api/complaints', async (req, res) => {
         <p style="text-align: center; font-size: 12px; color: #777;">We appreciate your patience.<br/>The Yatra Saral Support Team</p>
       </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral Support" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: `Complaint Registered [ID: ${createdComplaint.id}]`,
-      html: emailHtml,
-    };
-
-    try {
-      await sgMail.send(msg); // Use sgMail.send
-      console.log(`Complaint confirmation email sent to ${email}`);
-    } catch (error) {
-      console.error(`Failed to send complaint confirmation email to ${email}:`, error);
-      if (error.response) {
-        console.error(error.response.body);
-      }
-    }
+    await sendBrevoEmail(email, `Complaint Registered [ID: ${createdComplaint.id}]`, emailHtml, name);
   }
-
   res.status(201).json(createdComplaint);
 });
 
@@ -374,25 +330,8 @@ app.post('/api/food-orders', async (req, res) => {
         <p style="text-align: center; font-size: 12px; color: #777;">Enjoy your meal,<br/>The Yatra Saral Team</p>
       </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: `Your Pantry Food Order #${createdOrder.id} is Confirmed!`,
-      html: emailHtml,
-    };
-
-    try {
-      await sgMail.send(msg); // Use sgMail.send
-      console.log(`Food order confirmation email sent to ${email}`);
-    } catch (error) {
-      console.error(`Failed to send food order confirmation email to ${email}:`, error);
-      if (error.response) {
-        console.error(error.response.body);
-      }
-    }
+    await sendBrevoEmail(email, `Your Pantry Food Order #${createdOrder.id} is Confirmed!`, emailHtml, name);
   }
-
   res.status(201).json(createdOrder);
 });
 
@@ -428,25 +367,8 @@ app.post('/api/feedback', async (req, res) => {
         <p style="text-align: center; font-size: 12px; color: #777;">Sincerely,<br/>The Yatra Saral Team</p>
       </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: `We've Received Your Feedback`,
-      html: emailHtml,
-    };
-
-    try {
-      await sgMail.send(msg); // Use sgMail.send
-      console.log(`Feedback confirmation email sent to ${email}`);
-    } catch (error) {
-      console.error(`Failed to send feedback confirmation email to ${email}:`, error);
-      if (error.response) {
-        console.error(error.response.body);
-      }
-    }
+    await sendBrevoEmail(email, `We've Received Your Feedback`, emailHtml, name);
   }
-
   res.status(201).json({ message: 'Feedback submitted successfully' });
 });
 
@@ -458,41 +380,25 @@ app.post('/api/send-signup-otp', async (req, res) => {
   if (!email) return res.status(400).json({ message: 'Email is required' });
 
   try {
-    // 1. Check if a user with this email already exists
     const existingUser = await db.collection('users').findOne({ email: email });
     if (existingUser) {
       return res.status(409).json({ message: 'An account with this email already exists.' });
     }
 
-    // 2. Generate a 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 3. Create the email content
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: 'Your Verification Code for Yatra Saral',
-      html: `<div style="font-family: sans-serif; text-align: center; padding: 20px;">
+    const html = `<div style="font-family: sans-serif; text-align: center; padding: 20px;">
             <h2>Email Verification</h2>
             <p>Thank you for signing up. Please use the following code to verify your email address:</p>
             <p style="font-size: 24px; font-weight: bold; letter-spacing: 5px; background: #f0f0f0; padding: 10px; border-radius: 5px;">
               ${otp}
             </p>
-          </div>`,
-    };
+          </div>`;
 
-    // 4. Send the email
-    await sgMail.send(msg); // Use sgMail.send
-    console.log('Signup OTP email sent to: ' + email);
-
-    // 5. Respond to the frontend with the OTP for verification
+    await sendBrevoEmail(email, 'Your Verification Code for Yatra Saral', html);
     res.status(200).json({ message: 'OTP sent successfully', otp: otp });
 
   } catch (error) {
-    console.error('Failed to send signup OTP email:', error);
-    if (error.response) {
-      console.error(error.response.body);
-    }
     res.status(500).json({ message: 'Failed to send verification email.' });
   }
 });
@@ -513,9 +419,8 @@ app.post('/api/register', async (req, res) => {
   const result = await db.collection('users').insertOne({ name, email, phone, password: hashedPassword });
   const newUser = await db.collection('users').findOne({ _id: result.insertedId });
 
-  // Send welcome email after successful registration
   if (newUser) {
-    sendWelcomeEmail(newUser.email, newUser.name); // This function now uses SendGrid
+    sendWelcomeEmail(newUser.email, newUser.name);
   }
 
   delete newUser.password;
@@ -531,9 +436,7 @@ app.post('/api/login', async (req, res) => {
   const passwordMatch = user ? await bcrypt.compare(password, user.password) : false;
 
   if (user && passwordMatch) {
-    // Send welcome email on successful login
-    sendWelcomeEmail(user.email, user.name); // This function now uses SendGrid
-
+    sendWelcomeEmail(user.email, user.name);
     delete user.password;
     res.status(200).json(user);
   } else {
@@ -690,23 +593,7 @@ app.post('/api/bookings', async (req, res) => {
         <p style="text-align: center; font-size: 12px; color: #777;">${finalInstruction}<br/>The Yatra Saral Team</p>
       </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral Services" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: `Service Booking Confirmed [ID: ${createdBooking.id}]`,
-      html: emailHtml,
-    };
-
-    try {
-      await sgMail.send(msg); // Use sgMail.send
-      console.log(`Service booking confirmation email sent to ${email}`);
-    } catch (error) {
-      console.error(`Failed to send service booking confirmation email to ${email}:`, error);
-      if (error.response) {
-        console.error(error.response.body);
-      }
-    }
+    await sendBrevoEmail(email, `Service Booking Confirmed [ID: ${createdBooking.id}]`, emailHtml, name);
   }
 
   res.status(201).json(createdBooking);
@@ -727,6 +614,7 @@ app.patch('/api/tickets/:id/cancel', async (req, res) => {
   console.log(`Removed alert subscription for cancelled PNR: ${id}`);
   res.status(200).json({ message: 'Ticket cancelled and alert subscription removed successfully' });
 });
+
 app.delete('/api/tickets/cancelled', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   const { email } = req.body;
@@ -840,25 +728,8 @@ app.post('/api/platform-tickets', async (req, res) => {
             <p style="text-align: center; font-size: 12px; color: #777;">This is an automated email. Please do not reply.</p>
         </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: `Your Platform Ticket for ${station}`,
-      html: ticketHtml,
-    };
-
-    try {
-      await sgMail.send(msg); // Use sgMail.send
-      console.log(`Platform ticket email sent to ${email}`);
-    } catch (error) {
-      console.error(`Failed to send platform ticket email to ${email}:`, error);
-      if (error.response) {
-        console.error(error.response.body);
-      }
-    }
+    await sendBrevoEmail(email, `Your Platform Ticket for ${station}`, ticketHtml);
   }
-
   res.status(201).json(createdTicket);
 });
 
@@ -925,29 +796,10 @@ app.post('/api/insurance-applications', async (req, res) => {
         <p style="text-align: center; font-size: 12px; color: #777;">Safe travels,<br/>The Yatra Saral Team</p>
       </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: `Your Travel Insurance Application for ${destination} is Confirmed!`,
-      html: emailHtml,
-    };
-
-    try {
-      await sgMail.send(msg); // Use sgMail.send
-      console.log(`Insurance confirmation email sent to ${email}`);
-    } catch (error) {
-      console.error(`Failed to send insurance confirmation email to ${email}:`, error);
-      if (error.response) {
-        console.error(error.response.body);
-      }
-    }
+    await sendBrevoEmail(email, `Your Travel Insurance Application for ${destination} is Confirmed!`, emailHtml, fullName);
   }
-
   res.status(201).json(createdApplication);
 });
-
-
 
 // --- API Endpoints for Seat Upgrades ---
 app.get('/api/seat-upgrades/:email', async (req, res) => {
@@ -972,9 +824,8 @@ app.post('/api/seat-upgrades', async (req, res) => {
   const createdUpgrade = await db.collection('seat-upgrades').findOne({ _id: result.insertedId });
 
   const { pnr, from, to, requestWindowSeat, status, userEmail } = upgradeData;
-  const email = userEmail;
 
-  if (email) {
+  if (userEmail) {
     let title = status === 'Confirmed Upgrade' ? 'Your Seat Upgrade is Confirmed!' : 'Your Seat Upgrade is Waitlisted';
     let infoParagraph = '';
 
@@ -1020,25 +871,8 @@ app.post('/api/seat-upgrades', async (req, res) => {
         <p style="text-align: center; font-size: 12px; color: #777;">Wishing you a comfortable journey!<br/>The Yatra Saral Team</p>
       </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral Upgrades" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: `Seat Upgrade Update for PNR ${pnr} [ID: ${createdUpgrade.id}]`,
-      html: emailHtml,
-    };
-
-    try {
-      await sgMail.send(msg); // Use sgMail.send
-      console.log(`Seat upgrade confirmation email sent to ${email}`);
-    } catch (error) {
-      console.error(`Failed to send seat upgrade confirmation email to ${email}:`, error);
-      if (error.response) {
-        console.error(error.response.body);
-      }
-    }
+    await sendBrevoEmail(userEmail, `Seat Upgrade Update for PNR ${pnr} [ID: ${createdUpgrade.id}]`, emailHtml);
   }
-
   res.status(201).json(createdUpgrade);
 });
 
@@ -1095,6 +929,7 @@ app.post('/api/subscribe-alerts', async (req, res) => {
   await db.collection('alertSubscriptions').insertOne(newSubscription);
   res.status(201).json({ message: `Successfully subscribed for alerts for PNR ${pnr}.` });
 });
+
 app.delete('/api/unsubscribe-alerts/:pnr', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
   const { pnr } = req.params;
@@ -1103,7 +938,7 @@ app.delete('/api/unsubscribe-alerts/:pnr', async (req, res) => {
 });
 
 
-// --- NEW ENDPOINT for sending Budget Report Email ---
+// --- Budget Report Email ---
 app.post('/api/send-budget-report', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
 
@@ -1148,29 +983,14 @@ app.post('/api/send-budget-report', async (req, res) => {
             <p style="text-align: center; font-size: 12px; color: #777;">Happy and safe travels!<br/>The Yatra Saral Team</p>
         </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: 'Your Yatra Saral Trip Budget Report',
-      html: emailHtml,
-    };
-
-    await sgMail.send(msg); // Use sgMail.send
-    console.log(`Budget report sent to: ${email}`);
+    await sendBrevoEmail(email, 'Your Yatra Saral Trip Budget Report', emailHtml, name);
     res.status(200).json({ message: 'Report sent successfully' });
-
   } catch (error) {
-    console.error('Failed to send budget report email:', error);
-    if (error.response) {
-      console.error(error.response.body);
-    }
     res.status(500).json({ message: 'Failed to send report email.' });
   }
 });
 
-// --- Travel Checklist Email Endpoint ---
-
+// --- Travel Checklist Email ---
 app.post('/api/send-travel-checklist', async (req, res) => {
   if (!db) return res.status(503).json({ message: 'Database not connected' });
 
@@ -1199,29 +1019,12 @@ app.post('/api/send-travel-checklist', async (req, res) => {
         <p style="margin-top:20px;">✅ Safe travels and enjoy your journey!</p>
       </div>
     `;
-
-    const msg = { // Renamed to 'msg'
-      to: email,
-      from: `"Yatra Saral" <${process.env.EMAIL_USER}>`, // Verified sender
-      subject: "Your Travel Checklist - Yatra Saral",
-      html: htmlContent,
-    };
-
-    await sgMail.send(msg); // Use sgMail.send
-
+    await sendBrevoEmail(email, "Your Travel Checklist - Yatra Saral", htmlContent, name);
     res.json({ success: true, message: 'Travel checklist emailed successfully!' });
   } catch (error) {
-    console.error("Error sending travel checklist:", error);
-    if (error.response) {
-      console.error(error.response.body);
-    }
     res.status(500).json({ message: 'Failed to send travel checklist email' });
   }
 });
-
-// --- NO LOGIN OTP ENDPOINT FOUND in your file, so I am not adding it ---
-// If you have a '/api/send-login-otp' endpoint, you must update it like I updated '/api/send-signup-otp'.
-
 
 const PORT = 5000;
 app.listen(PORT, () => {
