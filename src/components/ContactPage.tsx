@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { Button } from './ui/button';
-import myPhoto from '../assets/me.png';
+import myPhoto from '../assets/mine.jpg';
 
 const getOpeningStatus = () => {
   const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
