@@ -64,6 +64,7 @@ Yatra-Saral-Web-Application/
 ├── src/
 │   ├── assets/
 │   │   ├── me.png
+│   │   ├── mine.jpg
 │   │   ├── p1.jpg
 │   │   ├── p2.jpg
 │   │   └── p3.jpg
