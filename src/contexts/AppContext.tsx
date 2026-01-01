@@ -135,7 +135,7 @@ const translations = {
     'service.travelAlerts.desc': 'Get notifications about delays, cancellations, and updates',
     'service.liveTrainTracking': 'Live Train Tracking',
     'service.liveTrainTracking.desc': "Track your train's real-time location and status",
-    'footer.rights': '© 2025 Rudra Gupta. All rights reserved',
+    'footer.rights': '© 2026 Rudra Gupta. All rights reserved',
     'home.hero.title': 'Yatra Saral',
     'home.hero.subtitle': 'Your journey made simple',
     'home.hero.bookJourney': 'Book Your Journey',
