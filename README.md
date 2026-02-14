@@ -177,6 +177,20 @@ Yatra-Saral-Web-Application/
 ├── tsconfig.json
 └── tsconfig.node.json
 ```
+## 📱 Mobile Application
+The Yatra Saral experience is now available as a native Android application, providing a seamless mobile interface for all web services.
+
+### Key Mobile Features
+- **Integrated WebView:** Access the full power of the Yatra Saral web platform within a dedicated app.
+- **Java-Based Core:** Built using modern Android development practices in Android Studio.
+- **Easy Access:** Quick-launch your travel planning and ticket management from your home screen.
+
+## 📥 Download Yatra Saral App
+Get the latest version of our Android application directly from this repository.
+
+[**Click here to Download Yatra Saral APK**](yatrasaral.apk)
+
+*Note: As this is a direct download, you may need to enable "Install from Unknown Sources" in your device's security settings.*
 
 ## ⚙️ Installation
 
